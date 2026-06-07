@@ -1,0 +1,19 @@
+name: Weekly Dependency Audit
+on:
+  schedule: [{ cron: '0 0 * * 1' }] # Monday 00:00 UTC
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: bun install --frozen-lockfile
+      - run: python scripts/auto-audit-remediator.py --ci-mode
+        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
