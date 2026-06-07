@@ -48,7 +48,7 @@
     "diff": "^9.0.0",
     "marked": "^18.0.5",
     "playwright": "^1.60.0",
-    "puppeteer-core": "^24.43.1",
+    "puppeteer-core": "^25.1.0",
     "socks": "^2.8.9"
   },
   "engines": {
