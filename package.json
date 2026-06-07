@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@ngrok/ngrok": "^1.7.0",
     "diff": "^9.0.0",
     "marked": "^18.0.5",
