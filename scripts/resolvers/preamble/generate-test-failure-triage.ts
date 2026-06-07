@@ -1,7 +1,5 @@
-
-
 export function generateTestFailureTriage(): string {
-  return `## Test Failure Ownership Triage
+	return `## Test Failure Ownership Triage
 
 When tests fail, do NOT immediately stop. First, determine ownership:
 
@@ -105,4 +103,3 @@ Use AskUserQuestion:
 - Continue with the workflow.
 - Note in output: "Pre-existing test failure skipped: <test-name>"`;
 }
-

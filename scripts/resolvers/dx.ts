@@ -8,12 +8,12 @@
  * plan-devex-review/dx-hall-of-fame.md and are loaded on-demand per pass
  * to avoid prompt bloat.
  */
-import type { TemplateContext } from './types';
+import type { TemplateContext } from "./types";
 
 export function generateDxFramework(ctx: TemplateContext): string {
-  const hallOfFamePath = `${ctx.paths.skillRoot}/plan-devex-review/dx-hall-of-fame.md`;
+	const hallOfFamePath = `${ctx.paths.skillRoot}/plan-devex-review/dx-hall-of-fame.md`;
 
-  return `## DX First Principles
+	return `## DX First Principles
 
 These are the laws. Every recommendation traces back to one of these.
 

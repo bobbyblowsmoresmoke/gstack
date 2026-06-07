@@ -1,4 +1,4 @@
-import type { TemplateContext } from '../types';
+import type { TemplateContext } from "../types";
 
 /**
  * Plan-mode-skill semantics block.
@@ -20,7 +20,7 @@ import type { TemplateContext } from '../types';
  * the full rationale.
  */
 export function generatePlanModeInfo(_ctx: TemplateContext): string {
-  return `## Plan Mode Safe Operations
+	return `## Plan Mode Safe Operations
 
 In plan mode, allowed because they inform the plan: \`$B\`, \`$D\`, \`codex exec\`/\`codex review\`, writes to \`~/.gstack/\`, writes to the plan file, and \`open\` for generated artifacts.
 
@@ -30,7 +30,7 @@ If the user invokes a skill in plan mode, the skill takes precedence over generi
 }
 
 export function generateCompletionStatus(ctx: TemplateContext): string {
-  return `## Completion Status Protocol
+	return `## Completion Status Protocol
 
 When completing a skill workflow, report status using one of:
 - **DONE** — completed with evidence.

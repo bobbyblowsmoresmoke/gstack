@@ -1,7 +1,5 @@
-
-
 export function generateContinuousCheckpoint(): string {
-  return `## Continuous Checkpoint Mode
+	return `## Continuous Checkpoint Mode
 
 If \`CHECKPOINT_MODE\` is \`"continuous"\`: auto-commit completed logical units with \`WIP:\` prefix.
 

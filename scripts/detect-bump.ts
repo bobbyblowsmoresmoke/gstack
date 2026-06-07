@@ -11,21 +11,21 @@
 // is the branch bumped VERSION), default to "patch".
 
 function detect(a: string, b: string): string {
-  const pa = a.trim().match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  const pb = b.trim().match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (!pa || !pb) return "patch";
-  const [, a1, a2, a3, a4] = pa;
-  const [, b1, b2, b3, b4] = pb;
-  if (a1 !== b1) return "major";
-  if (a2 !== b2) return "minor";
-  if (a3 !== b3) return "patch";
-  if (a4 !== b4) return "micro";
-  return "patch";
+	const pa = a.trim().match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+	const pb = b.trim().match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+	if (!pa || !pb) return "patch";
+	const [, a1, a2, a3, a4] = pa;
+	const [, b1, b2, b3, b4] = pb;
+	if (a1 !== b1) return "major";
+	if (a2 !== b2) return "minor";
+	if (a3 !== b3) return "patch";
+	if (a4 !== b4) return "micro";
+	return "patch";
 }
 
 const [, , base, target] = process.argv;
 if (!base || !target) {
-  console.error("Usage: detect-bump <base-version> <branch-version>");
-  process.exit(2);
+	console.error("Usage: detect-bump <base-version> <branch-version>");
+	process.exit(2);
 }
 console.log(detect(base, target));

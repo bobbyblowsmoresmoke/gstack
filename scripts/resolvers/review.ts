@@ -12,13 +12,15 @@
  * Review logs are stored locally at ~/.gstack/reviews/review-log.jsonl.
  * Codex CLI prompts are written to temp files to prevent shell injection.
  */
-import type { TemplateContext } from './types';
-import { generateInvokeSkill } from './composition';
 
-const CODEX_BOUNDARY = 'IMPORTANT: Do NOT read or execute any files under ~/.claude/, ~/.agents/, .claude/skills/, or agents/. These are Claude Code skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\\n\\n';
+import { generateInvokeSkill } from "./composition";
+import type { TemplateContext } from "./types";
+
+const CODEX_BOUNDARY =
+	"IMPORTANT: Do NOT read or execute any files under ~/.claude/, ~/.agents/, .claude/skills/, or agents/. These are Claude Code skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\\n\\n";
 
 export function generateReviewDashboard(_ctx: TemplateContext): string {
-  return `## Review Readiness Dashboard
+	return `## Review Readiness Dashboard
 
 After completing the review, read the review log and config to display the dashboard.
 
@@ -71,7 +73,7 @@ Display:
 }
 
 export function generatePlanFileReviewReport(_ctx: TemplateContext): string {
-  return `## Plan File Review Report
+	return `## Plan File Review Report
 
 After displaying the Review Readiness Dashboard in conversation output, also update the
 **plan file** itself so review status is visible to anyone reading the plan.
@@ -159,11 +161,11 @@ there — the user then sees a plan whose review report is not at the bottom and
 }
 
 export function generateAntiShortcutClause(_ctx: TemplateContext): string {
-  return `**Anti-shortcut clause:** The plan file is the OUTPUT of the interactive review, not a substitute for it. Writing every finding into one plan write and calling ExitPlanMode without firing AskUserQuestion is the precise failure mode of the May 2026 transcript bug — the model explored, found issues, and dumped them into a deliverable rather than walking the user through them. If you have ANY non-trivial finding in any review section, the path from finding to ExitPlanMode goes THROUGH AskUserQuestion. Zero findings in every section is the only path to ExitPlanMode that bypasses AskUserQuestion. If you find yourself wanting to write a plan with findings before asking, stop and call AskUserQuestion now — that's the bug, recognize it.`;
+	return `**Anti-shortcut clause:** The plan file is the OUTPUT of the interactive review, not a substitute for it. Writing every finding into one plan write and calling ExitPlanMode without firing AskUserQuestion is the precise failure mode of the May 2026 transcript bug — the model explored, found issues, and dumped them into a deliverable rather than walking the user through them. If you have ANY non-trivial finding in any review section, the path from finding to ExitPlanMode goes THROUGH AskUserQuestion. Zero findings in every section is the only path to ExitPlanMode that bypasses AskUserQuestion. If you find yourself wanting to write a plan with findings before asking, stop and call AskUserQuestion now — that's the bug, recognize it.`;
 }
 
 export function generateSpecReviewLoop(_ctx: TemplateContext): string {
-  return `## Spec Review Loop
+	return `## Spec Review Loop
 
 Before presenting the document to the user for approval, run an adversarial review.
 
@@ -227,15 +229,15 @@ Replace ITERATIONS, FOUND, FIXED, REMAINING, SCORE with actual values from the r
 }
 
 export function generateBenefitsFrom(ctx: TemplateContext): string {
-  if (!ctx.benefitsFrom || ctx.benefitsFrom.length === 0) return '';
+	if (!ctx.benefitsFrom || ctx.benefitsFrom.length === 0) return "";
 
-  const skillList = ctx.benefitsFrom.map(s => `\`/${s}\``).join(' or ');
-  const first = ctx.benefitsFrom[0];
+	const skillList = ctx.benefitsFrom.map((s) => `\`/${s}\``).join(" or ");
+	const first = ctx.benefitsFrom[0];
 
-  // Reuse the INVOKE_SKILL resolver for the actual loading instructions
-  const invokeBlock = generateInvokeSkill(ctx, [first]);
+	// Reuse the INVOKE_SKILL resolver for the actual loading instructions
+	const invokeBlock = generateInvokeSkill(ctx, [first]);
 
-  return `## Prerequisite Skill Offer
+	return `## Prerequisite Skill Offer
 
 When the design doc check above prints "No design doc found," offer the prerequisite
 skill before proceeding.
@@ -276,10 +278,10 @@ If none was produced (user may have cancelled), proceed with standard review.`;
 }
 
 export function generateCodexSecondOpinion(ctx: TemplateContext): string {
-  // Codex host: strip entirely — Codex should never invoke itself
-  if (ctx.host === 'codex') return '';
+	// Codex host: strip entirely — Codex should never invoke itself
+	if (ctx.host === "codex") return "";
 
-  return `## Phase 3.5: Cross-Model Second Opinion (optional)
+	return `## Phase 3.5: Cross-Model Second Opinion (optional)
 
 **Binary check first:**
 
@@ -385,10 +387,10 @@ If A: revise the premise and note the revision. If B: proceed (and note that the
 // ─── Scope Drift Detection (shared between /review and /ship) ────────
 
 export function generateScopeDrift(ctx: TemplateContext): string {
-  const isShip = ctx.skillName === 'ship';
-  const stepNum = isShip ? '8.2' : '1.5';
+	const isShip = ctx.skillName === "ship";
+	const stepNum = isShip ? "8.2" : "1.5";
 
-  return `## Step ${stepNum}: Scope Drift Detection
+	return `## Step ${stepNum}: Scope Drift Detection
 
 Before reviewing code quality, check: **did they build what was requested — nothing more, nothing less?**
 
@@ -427,13 +429,13 @@ Before reviewing code quality, check: **did they build what was requested — no
 // ─── Adversarial Review (always-on) ──────────────────────────────────
 
 export function generateAdversarialStep(ctx: TemplateContext): string {
-  // Codex host: strip entirely — Codex should never invoke itself
-  if (ctx.host === 'codex') return '';
+	// Codex host: strip entirely — Codex should never invoke itself
+	if (ctx.host === "codex") return "";
 
-  const isShip = ctx.skillName === 'ship';
-  const stepNum = isShip ? '11' : '5.7';
+	const isShip = ctx.skillName === "ship";
+	const stepNum = isShip ? "11" : "5.7";
 
-  return `## Step ${stepNum}: Adversarial review (always-on)
+	return `## Step ${stepNum}: Adversarial review (always-on)
 
 Every diff gets adversarial review from both Claude and Codex. LOC is not a proxy for risk — a 5-line auth change can be critical.
 
@@ -519,7 +521,7 @@ A) Investigate and fix now (recommended)
 B) Continue — review will still complete
 \`\`\`
 
-If A: address the findings${isShip ? '. After fixing, re-run tests (Step 5) since code has changed' : ''}. Re-run \`codex review\` to verify.
+If A: address the findings${isShip ? ". After fixing, re-run tests (Step 5) since code has changed" : ""}. Re-run \`codex review\` to verify.
 
 Read stderr for errors (same error handling as Codex adversarial above).
 
@@ -560,10 +562,10 @@ High-confidence findings (agreed on by multiple sources) should be prioritized f
 }
 
 export function generateCodexPlanReview(ctx: TemplateContext): string {
-  // Codex host: strip entirely — Codex should never invoke itself
-  if (ctx.host === 'codex') return '';
+	// Codex host: strip entirely — Codex should never invoke itself
+	if (ctx.host === "codex") return "";
 
-  return `## Outside Voice — Independent Plan Challenge (optional, recommended)
+	return `## Outside Voice — Independent Plan Challenge (optional, recommended)
 
 After all review sections are complete, offer an independent second opinion from a
 different AI system. Two models agreeing on a plan is stronger signal than one model's
@@ -703,7 +705,7 @@ SOURCE = "codex" if Codex ran, "claude" if subagent ran.
 // ─── Plan File Discovery (shared helper) ──────────────────────────────
 
 function generatePlanFileDiscovery(): string {
-  return `### Plan File Discovery
+	return `### Plan File Discovery
 
 1. **Conversation context (primary):** Check if there is an active plan file in this conversation. The host agent's system messages include plan file paths when in plan mode. If found, use it directly — this is the most reliable signal.
 
@@ -736,16 +738,16 @@ done
 
 // ─── Plan Completion Audit ────────────────────────────────────────────
 
-type PlanCompletionMode = 'ship' | 'review';
+type PlanCompletionMode = "ship" | "review";
 
 function generatePlanCompletionAuditInner(mode: PlanCompletionMode): string {
-  const sections: string[] = [];
+	const sections: string[] = [];
 
-  // ── Plan file discovery (shared) ──
-  sections.push(generatePlanFileDiscovery());
+	// ── Plan file discovery (shared) ──
+	sections.push(generatePlanFileDiscovery());
 
-  // ── Item extraction ──
-  sections.push(`
+	// ── Item extraction ──
+	sections.push(`
 ### Actionable Item Extraction
 
 Read the plan file. Extract every actionable item — anything that describes work to be done. Look for:
@@ -772,8 +774,8 @@ For each item, note:
 - The item text (verbatim or concise summary)
 - Its category: CODE | TEST | MIGRATION | CONFIG | DOCS`);
 
-  // ── Verification Mode (per PR #1302 — VAS-449 remediation) ──
-  sections.push(`
+	// ── Verification Mode (per PR #1302 — VAS-449 remediation) ──
+	sections.push(`
 ### Verification Mode
 
 Before judging completion, classify HOW each item can be verified. The diff alone cannot prove every kind of work. Items outside the current repo or system are structurally invisible to \`git diff\`.
@@ -796,8 +798,8 @@ Before judging completion, classify HOW each item can be verified. The diff alon
 
 **Honesty rule.** Do NOT classify an item as DONE just because related code shipped. Code that *handles* a deliverable is not the deliverable. Shipping a markdown-extraction library is not the same as shipping the markdown file. When in doubt between DONE and UNVERIFIABLE, prefer UNVERIFIABLE — better to surface a confirmation prompt than silently miss a deliverable.`);
 
-  // ── Cross-reference against diff ──
-  sections.push(`
+	// ── Cross-reference against diff ──
+	sections.push(`
 ### Cross-Reference Against Diff
 
 Run \`git diff origin/<base>...HEAD\` and \`git log origin/<base>..HEAD --oneline\` to understand what was implemented.
@@ -814,8 +816,8 @@ For each extracted plan item, run the verification dispatch from the previous se
 **Be generous with CHANGED** — if the goal is met by different means, that counts as addressed.
 **Be honest with UNVERIFIABLE** — better to surface 5 items the user must manually confirm than silently classify them DONE.`);
 
-  // ── Output format ──
-  sections.push(`
+	// ── Output format ──
+	sections.push(`
 ### Output Format
 
 \`\`\`
@@ -846,9 +848,9 @@ COMPLETION: 5/9 DONE, 1 PARTIAL, 1 NOT DONE, 1 CHANGED, 2 UNVERIFIABLE
 ─────────────────────────────────
 \`\`\``);
 
-  // ── Gate logic (mode-specific) ──
-  if (mode === 'ship') {
-    sections.push(`
+	// ── Gate logic (mode-specific) ──
+	if (mode === "ship") {
+		sections.push(`
 ### Gate Logic
 
 After producing the completion checklist, evaluate in priority order:
@@ -890,9 +892,9 @@ After producing the completion checklist, evaluate in priority order:
 **No plan file found:** Skip entirely. "No plan file detected — skipping plan completion audit."
 
 **Include in PR body (Step 8):** Add a \`## Plan Completion\` section with the checklist summary.`);
-  } else {
-    // review mode — enhanced Delivery Integrity (Release 2: Review Army)
-    sections.push(`
+	} else {
+		// review mode — enhanced Delivery Integrity (Release 2: Review Army)
+		sections.push(`
 ### Fallback Intent Sources (when no plan file found)
 
 When no plan file is detected, use these secondary intent sources:
@@ -970,23 +972,25 @@ Plan items: N DONE, M PARTIAL, K NOT DONE
 \`\`\`
 
 **No plan file found:** Use commit messages and TODOS.md as fallback sources (see above). If no intent sources at all, skip with: "No intent sources detected — skipping completion audit."`);
-  }
+	}
 
-  return sections.join('\n');
+	return sections.join("\n");
 }
 
 export function generatePlanCompletionAuditShip(_ctx: TemplateContext): string {
-  return generatePlanCompletionAuditInner('ship');
+	return generatePlanCompletionAuditInner("ship");
 }
 
-export function generatePlanCompletionAuditReview(_ctx: TemplateContext): string {
-  return generatePlanCompletionAuditInner('review');
+export function generatePlanCompletionAuditReview(
+	_ctx: TemplateContext,
+): string {
+	return generatePlanCompletionAuditInner("review");
 }
 
 // ─── Plan Verification Execution ──────────────────────────────────────
 
 export function generatePlanVerificationExec(_ctx: TemplateContext): string {
-  return `## Step 8.1: Plan Verification
+	return `## Step 8.1: Plan Verification
 
 Automatically verify the plan's testing/verification steps using the \`/qa-only\` skill.
 
@@ -1048,13 +1052,13 @@ Add a \`## Verification Results\` section to the PR body (Step 19):
 // ─── Cross-Review Finding Dedup ──────────────────────────────────────
 
 export function generateCrossReviewDedup(ctx: TemplateContext): string {
-  const isShip = ctx.skillName === 'ship';
-  const stepNum = isShip ? '9.3' : '5.0';
-  const findingsRef = isShip
-    ? 'the checklist pass (Step 9) and specialist review (Step 9.1-9.2)'
-    : 'Step 4 critical pass and Step 4.5-4.6 specialists';
+	const isShip = ctx.skillName === "ship";
+	const stepNum = isShip ? "9.3" : "5.0";
+	const findingsRef = isShip
+		? "the checklist pass (Step 9) and specialist review (Step 9.1-9.2)"
+		: "Step 4 critical pass and Step 4.5-4.6 specialists";
 
-  return `### Step ${stepNum}: Cross-review finding dedup
+	return `### Step ${stepNum}: Cross-review finding dedup
 
 Before classifying findings, check if any were previously skipped by the user in a prior review on this branch.
 

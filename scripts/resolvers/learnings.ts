@@ -11,7 +11,7 @@
  * Cross-project discovery is opt-in. The resolver asks the user once via
  * AskUserQuestion and persists the preference via gstack-config.
  */
-import type { TemplateContext } from './types';
+import type { TemplateContext } from "./types";
 
 // Whitelist for query= macro values. Allows alphanumeric, space, hyphen, underscore.
 // Anything else (e.g. $, backticks, quotes, ;) is a shell-injection vector when the
@@ -20,23 +20,26 @@ import type { TemplateContext } from './types';
 // future contributors writing dangerous values.
 const QUERY_SAFE_RE = /^[A-Za-z0-9 _-]+$/;
 
-export function generateLearningsSearch(ctx: TemplateContext, args?: string[]): string {
-  // Parse query= arg. Empty value falls through to no-query (principle of least surprise:
-  // a stray {{LEARNINGS_SEARCH:query=}} placeholder gets today's behavior, not a build error).
-  const queryArg = (args || [])
-    .filter(a => a.startsWith('query='))
-    .map(a => a.slice(6))
-    .filter(Boolean)[0];
-  if (queryArg && !QUERY_SAFE_RE.test(queryArg)) {
-    throw new Error(
-      `{{LEARNINGS_SEARCH:query=...}} value must match ${QUERY_SAFE_RE} (alphanumeric, space, hyphen, underscore). Got: ${JSON.stringify(queryArg)}`
-    );
-  }
-  const queryFlag = queryArg ? ` --query "${queryArg}"` : '';
+export function generateLearningsSearch(
+	ctx: TemplateContext,
+	args?: string[],
+): string {
+	// Parse query= arg. Empty value falls through to no-query (principle of least surprise:
+	// a stray {{LEARNINGS_SEARCH:query=}} placeholder gets today's behavior, not a build error).
+	const queryArg = (args || [])
+		.filter((a) => a.startsWith("query="))
+		.map((a) => a.slice(6))
+		.filter(Boolean)[0];
+	if (queryArg && !QUERY_SAFE_RE.test(queryArg)) {
+		throw new Error(
+			`{{LEARNINGS_SEARCH:query=...}} value must match ${QUERY_SAFE_RE} (alphanumeric, space, hyphen, underscore). Got: ${JSON.stringify(queryArg)}`,
+		);
+	}
+	const queryFlag = queryArg ? ` --query "${queryArg}"` : "";
 
-  if (ctx.host === 'codex') {
-    // Codex: simpler version, no cross-project, uses $GSTACK_BIN
-    return `## Prior Learnings
+	if (ctx.host === "codex") {
+		// Codex: simpler version, no cross-project, uses $GSTACK_BIN
+		return `## Prior Learnings
 
 Search for relevant learnings from previous sessions on this project:
 
@@ -46,9 +49,9 @@ $GSTACK_BIN/gstack-learnings-search --limit 10${queryFlag} 2>/dev/null || true
 
 If learnings are found, incorporate them into your analysis. When a review finding
 matches a past learning, note it: "Prior learning applied: [key] (confidence N, from [date])"`;
-  }
+	}
 
-  return `## Prior Learnings
+	return `## Prior Learnings
 
 Search for relevant learnings from previous sessions:
 
@@ -88,9 +91,9 @@ smarter on their codebase over time.`;
 }
 
 export function generateLearningsLog(ctx: TemplateContext): string {
-  const binDir = ctx.host === 'codex' ? '$GSTACK_BIN' : ctx.paths.binDir;
+	const binDir = ctx.host === "codex" ? "$GSTACK_BIN" : ctx.paths.binDir;
 
-  return `## Capture Learnings
+	return `## Capture Learnings
 
 If you discovered a non-obvious pattern, pitfall, or architectural insight during
 this session, log it for future sessions:

@@ -1,5 +1,3 @@
 {
-  "ignores": [
-    "**/vendor/**"
-  ]
+	"ignores": ["**/vendor/**"]
 }

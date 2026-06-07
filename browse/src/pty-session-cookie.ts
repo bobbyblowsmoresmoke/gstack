@@ -18,27 +18,27 @@
  * different (`gstack_sse` vs `gstack_pty`) and the token spaces must not
  * overlap — an SSE-read cookie must never grant PTY access, and vice versa.
  */
-import * as crypto from 'crypto';
+import * as crypto from "crypto";
 
 interface Session {
-  createdAt: number;
-  expiresAt: number;
+	createdAt: number;
+	expiresAt: number;
 }
 
 const TTL_MS = 30 * 60 * 1000; // 30 minutes — matches SSE cookie
 const MAX_SESSIONS = 10_000;
 const sessions = new Map<string, Session>();
 
-export const PTY_COOKIE_NAME = 'gstack_pty';
+export const PTY_COOKIE_NAME = "gstack_pty";
 
 /** Mint a fresh PTY session token. */
 export function mintPtySessionToken(): { token: string; expiresAt: number } {
-  const token = crypto.randomBytes(32).toString('base64url');
-  const now = Date.now();
-  const expiresAt = now + TTL_MS;
-  sessions.set(token, { createdAt: now, expiresAt });
-  pruneExpired(now);
-  return { token, expiresAt };
+	const token = crypto.randomBytes(32).toString("base64url");
+	const now = Date.now();
+	const expiresAt = now + TTL_MS;
+	sessions.set(token, { createdAt: now, expiresAt });
+	pruneExpired(now);
+	return { token, expiresAt };
 }
 
 /**
@@ -46,19 +46,21 @@ export function mintPtySessionToken(): { token: string; expiresAt: number } {
  * Lazily removes expired entries; opportunistically prunes a few more on
  * every call so the registry stays bounded under reconnect pressure.
  */
-export function validatePtySessionToken(token: string | null | undefined): boolean {
-  if (!token) return false;
-  const s = sessions.get(token);
-  if (!s) {
-    pruneExpired(Date.now());
-    return false;
-  }
-  if (Date.now() > s.expiresAt) {
-    sessions.delete(token);
-    pruneExpired(Date.now());
-    return false;
-  }
-  return true;
+export function validatePtySessionToken(
+	token: string | null | undefined,
+): boolean {
+	if (!token) return false;
+	const s = sessions.get(token);
+	if (!s) {
+		pruneExpired(Date.now());
+		return false;
+	}
+	if (Date.now() > s.expiresAt) {
+		sessions.delete(token);
+		pruneExpired(Date.now());
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -66,21 +68,21 @@ export function validatePtySessionToken(token: string | null | undefined): boole
  * replayed against a new PTY).
  */
 export function revokePtySessionToken(token: string | null | undefined): void {
-  if (!token) return;
-  sessions.delete(token);
+	if (!token) return;
+	sessions.delete(token);
 }
 
 /** Parse the PTY session token from a Cookie header. */
 export function extractPtyCookie(req: Request): string | null {
-  const cookieHeader = req.headers.get('cookie');
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(';')) {
-    const [name, ...valueParts] = part.trim().split('=');
-    if (name === PTY_COOKIE_NAME) {
-      return valueParts.join('=') || null;
-    }
-  }
-  return null;
+	const cookieHeader = req.headers.get("cookie");
+	if (!cookieHeader) return null;
+	for (const part of cookieHeader.split(";")) {
+		const [name, ...valueParts] = part.trim().split("=");
+		if (name === PTY_COOKIE_NAME) {
+			return valueParts.join("=") || null;
+		}
+	}
+	return null;
 }
 
 /**
@@ -94,29 +96,29 @@ export function extractPtyCookie(req: Request): string | null {
  * HTTP; setting Secure would prevent the browser from ever sending it back.
  */
 export function buildPtySetCookie(token: string): string {
-  const maxAge = Math.floor(TTL_MS / 1000);
-  return `${PTY_COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+	const maxAge = Math.floor(TTL_MS / 1000);
+	return `${PTY_COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
 }
 
 /** Clear the PTY session cookie. */
 export function buildPtyClearCookie(): string {
-  return `${PTY_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`;
+	return `${PTY_COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`;
 }
 
 function pruneExpired(now: number): void {
-  let checked = 0;
-  for (const [token, session] of sessions) {
-    if (checked++ >= 20) break;
-    if (session.expiresAt <= now) sessions.delete(token);
-  }
-  while (sessions.size > MAX_SESSIONS) {
-    const first = sessions.keys().next().value;
-    if (!first) break;
-    sessions.delete(first);
-  }
+	let checked = 0;
+	for (const [token, session] of sessions) {
+		if (checked++ >= 20) break;
+		if (session.expiresAt <= now) sessions.delete(token);
+	}
+	while (sessions.size > MAX_SESSIONS) {
+		const first = sessions.keys().next().value;
+		if (!first) break;
+		sessions.delete(first);
+	}
 }
 
 // Test-only reset.
 export function __resetPtySessions(): void {
-  sessions.clear();
+	sessions.clear();
 }

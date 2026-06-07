@@ -1,48 +1,54 @@
-import type { HostConfig } from '../scripts/host-config';
+import type { HostConfig } from "../scripts/host-config";
 
 const slate: HostConfig = {
-  name: 'slate',
-  displayName: 'Slate',
-  cliCommand: 'slate',
-  cliAliases: [],
+	name: "slate",
+	displayName: "Slate",
+	cliCommand: "slate",
+	cliAliases: [],
 
-  globalRoot: '.slate/skills/gstack',
-  localSkillRoot: '.slate/skills/gstack',
-  hostSubdir: '.slate',
-  usesEnvVars: true,
+	globalRoot: ".slate/skills/gstack",
+	localSkillRoot: ".slate/skills/gstack",
+	hostSubdir: ".slate",
+	usesEnvVars: true,
 
-  frontmatter: {
-    mode: 'allowlist',
-    keepFields: ['name', 'description'],
-    descriptionLimit: null,
-  },
+	frontmatter: {
+		mode: "allowlist",
+		keepFields: ["name", "description"],
+		descriptionLimit: null,
+	},
 
-  generation: {
-    generateMetadata: false,
-    skipSkills: ['codex'],
-  },
+	generation: {
+		generateMetadata: false,
+		skipSkills: ["codex"],
+	},
 
-  pathRewrites: [
-    { from: '~/.claude/skills/gstack', to: '~/.slate/skills/gstack' },
-    { from: '.claude/skills/gstack', to: '.slate/skills/gstack' },
-    { from: '.claude/skills', to: '.slate/skills' },
-  ],
+	pathRewrites: [
+		{ from: "~/.claude/skills/gstack", to: "~/.slate/skills/gstack" },
+		{ from: ".claude/skills/gstack", to: ".slate/skills/gstack" },
+		{ from: ".claude/skills", to: ".slate/skills" },
+	],
 
-  suppressedResolvers: ['GBRAIN_CONTEXT_LOAD', 'GBRAIN_SAVE_RESULTS'],
+	suppressedResolvers: ["GBRAIN_CONTEXT_LOAD", "GBRAIN_SAVE_RESULTS"],
 
-  runtimeRoot: {
-    globalSymlinks: ['bin', 'browse/dist', 'browse/bin', 'gstack-upgrade', 'ETHOS.md'],
-    globalFiles: {
-      'review': ['checklist.md', 'TODOS-format.md'],
-    },
-  },
+	runtimeRoot: {
+		globalSymlinks: [
+			"bin",
+			"browse/dist",
+			"browse/bin",
+			"gstack-upgrade",
+			"ETHOS.md",
+		],
+		globalFiles: {
+			review: ["checklist.md", "TODOS-format.md"],
+		},
+	},
 
-  install: {
-    prefixable: false,
-    linkingStrategy: 'symlink-generated',
-  },
+	install: {
+		prefixable: false,
+		linkingStrategy: "symlink-generated",
+	},
 
-  learningsMode: 'basic',
+	learningsMode: "basic",
 };
 
 export default slate;

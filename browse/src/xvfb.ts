@@ -19,22 +19,22 @@
  *     when DISPLAY or WAYLAND_DISPLAY is already set (codex F2).
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { safeKill, isProcessAlive } from './error-handling';
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { isProcessAlive, safeKill } from "./error-handling";
 
 export interface XvfbHandle {
-  pid: number;
-  startTime: string;
-  display: string; // e.g. ":99"
-  /** Best-effort cleanup. Validates ownership before kill. */
-  close: () => void;
+	pid: number;
+	startTime: string;
+	display: string; // e.g. ":99"
+	/** Best-effort cleanup. Validates ownership before kill. */
+	close: () => void;
 }
 
 export interface ShouldSpawnDecision {
-  spawn: boolean;
-  reason: string;
+	spawn: boolean;
+	reason: string;
 }
 
 const DISPLAY_RANGE_START = 99;
@@ -44,12 +44,28 @@ const DISPLAY_RANGE_END = 120;
  * Decide whether the daemon should auto-spawn an Xvfb. Pure: takes env +
  * platform and returns a decision. Easy to unit test.
  */
-export function shouldSpawnXvfb(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): ShouldSpawnDecision {
-  if (env.BROWSE_HEADED !== '1') return { spawn: false, reason: 'not headed mode' };
-  if (platform !== 'linux') return { spawn: false, reason: `platform ${platform} uses native windowing` };
-  if (env.DISPLAY) return { spawn: false, reason: `DISPLAY=${env.DISPLAY} already set` };
-  if (env.WAYLAND_DISPLAY) return { spawn: false, reason: `WAYLAND_DISPLAY=${env.WAYLAND_DISPLAY} set; Chromium uses Wayland natively` };
-  return { spawn: true, reason: 'linux headed without DISPLAY/WAYLAND_DISPLAY' };
+export function shouldSpawnXvfb(
+	env: NodeJS.ProcessEnv,
+	platform: NodeJS.Platform,
+): ShouldSpawnDecision {
+	if (env.BROWSE_HEADED !== "1")
+		return { spawn: false, reason: "not headed mode" };
+	if (platform !== "linux")
+		return {
+			spawn: false,
+			reason: `platform ${platform} uses native windowing`,
+		};
+	if (env.DISPLAY)
+		return { spawn: false, reason: `DISPLAY=${env.DISPLAY} already set` };
+	if (env.WAYLAND_DISPLAY)
+		return {
+			spawn: false,
+			reason: `WAYLAND_DISPLAY=${env.WAYLAND_DISPLAY} set; Chromium uses Wayland natively`,
+		};
+	return {
+		spawn: true,
+		reason: "linux headed without DISPLAY/WAYLAND_DISPLAY",
+	};
 }
 
 /**
@@ -57,12 +73,14 @@ export function shouldSpawnXvfb(env: NodeJS.ProcessEnv, platform: NodeJS.Platfor
  * on it (i.e., we can safely spawn a new Xvfb there).
  */
 export function isDisplayFree(displayNum: number): boolean {
-  // xdpyinfo exits 0 if a display is reachable. Exit non-zero means no
-  // server, which is what we want.
-  const result = Bun.spawnSync(['xdpyinfo', '-display', `:${displayNum}`], {
-    stdout: 'ignore', stderr: 'ignore', timeout: 2000,
-  });
-  return result.exitCode !== 0;
+	// xdpyinfo exits 0 if a display is reachable. Exit non-zero means no
+	// server, which is what we want.
+	const result = Bun.spawnSync(["xdpyinfo", "-display", `:${displayNum}`], {
+		stdout: "ignore",
+		stderr: "ignore",
+		timeout: 2000,
+	});
+	return result.exitCode !== 0;
 }
 
 /**
@@ -70,13 +88,13 @@ export function isDisplayFree(displayNum: number): boolean {
  * displays in the range are taken.
  */
 export function pickFreeDisplay(
-  rangeStart: number = DISPLAY_RANGE_START,
-  rangeEnd: number = DISPLAY_RANGE_END,
+	rangeStart: number = DISPLAY_RANGE_START,
+	rangeEnd: number = DISPLAY_RANGE_END,
 ): number | null {
-  for (let n = rangeStart; n <= rangeEnd; n++) {
-    if (isDisplayFree(n)) return n;
-  }
-  return null;
+	for (let n = rangeStart; n <= rangeEnd; n++) {
+		if (isDisplayFree(n)) return n;
+	}
+	return null;
 }
 
 /**
@@ -86,12 +104,14 @@ export function pickFreeDisplay(
  * is gone or ps fails.
  */
 export function readPidStartTime(pid: number): string {
-  if (!isProcessAlive(pid)) return '';
-  const result = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'lstart='], {
-    stdout: 'pipe', stderr: 'pipe', timeout: 2000,
-  });
-  if (result.exitCode !== 0) return '';
-  return result.stdout.toString().trim();
+	if (!isProcessAlive(pid)) return "";
+	const result = Bun.spawnSync(["ps", "-p", String(pid), "-o", "lstart="], {
+		stdout: "pipe",
+		stderr: "pipe",
+		timeout: 2000,
+	});
+	if (result.exitCode !== 0) return "";
+	return result.stdout.toString().trim();
 }
 
 /**
@@ -99,11 +119,14 @@ export function readPidStartTime(pid: number): string {
  * if the process is gone or the cmdline isn't readable.
  */
 export function readPidCmdline(pid: number): string {
-  try {
-    return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf-8').replace(/\0/g, ' ').trim();
-  } catch {
-    return '';
-  }
+	try {
+		return fs
+			.readFileSync(`/proc/${pid}/cmdline`, "utf-8")
+			.replace(/\0/g, " ")
+			.trim();
+	} catch {
+		return "";
+	}
 }
 
 /**
@@ -113,12 +136,12 @@ export function readPidCmdline(pid: number): string {
  *   2. Start time matches the recorded value (PID reuse defense)
  */
 export function isOurXvfb(pid: number, recordedStartTime: string): boolean {
-  if (!pid || !recordedStartTime) return false;
-  const cmdline = readPidCmdline(pid);
-  if (!cmdline.toLowerCase().includes('xvfb')) return false;
-  const currentStart = readPidStartTime(pid);
-  if (!currentStart) return false;
-  return currentStart === recordedStartTime;
+	if (!pid || !recordedStartTime) return false;
+	const cmdline = readPidCmdline(pid);
+	if (!cmdline.toLowerCase().includes("xvfb")) return false;
+	const currentStart = readPidStartTime(pid);
+	if (!currentStart) return false;
+	return currentStart === recordedStartTime;
 }
 
 /**
@@ -129,39 +152,53 @@ export function isOurXvfb(pid: number, recordedStartTime: string): boolean {
  * install hint).
  */
 export async function spawnXvfb(displayNum: number): Promise<XvfbHandle> {
-  const display = `:${displayNum}`;
+	const display = `:${displayNum}`;
 
-  // Spawn detached: Xvfb's lifetime is tied to whether we've explicitly
-  // killed it via the handle's close() method, not to the parent process.
-  const proc = Bun.spawn(['Xvfb', display, '-screen', '0', '1920x1080x24', '-ac'], {
-    stdio: ['ignore', 'ignore', 'ignore'],
-  });
-  proc.unref();
+	// Spawn detached: Xvfb's lifetime is tied to whether we've explicitly
+	// killed it via the handle's close() method, not to the parent process.
+	const proc = Bun.spawn(
+		["Xvfb", display, "-screen", "0", "1920x1080x24", "-ac"],
+		{
+			stdio: ["ignore", "ignore", "ignore"],
+		},
+	);
+	proc.unref();
 
-  // Wait for the X server to become reachable — Xvfb takes a few hundred ms
-  // to bind. Probe via xdpyinfo with retries.
-  const deadline = Date.now() + 3000;
-  let ready = false;
-  while (Date.now() < deadline) {
-    await Bun.sleep(100);
-    if (!isDisplayFree(displayNum)) { ready = true; break; }
-    // If Xvfb crashed during startup, fail fast.
-    if (proc.exitCode != null) {
-      throw new Error(`Xvfb on ${display} exited during startup (code ${proc.exitCode}). Hint: install xvfb (apt-get install xvfb / yum install xorg-x11-server-Xvfb).`);
-    }
-  }
-  if (!ready) {
-    try { proc.kill('SIGKILL'); } catch { /* ignore */ }
-    throw new Error(`Xvfb on ${display} never became reachable within 3s timeout`);
-  }
+	// Wait for the X server to become reachable — Xvfb takes a few hundred ms
+	// to bind. Probe via xdpyinfo with retries.
+	const deadline = Date.now() + 3000;
+	let ready = false;
+	while (Date.now() < deadline) {
+		await Bun.sleep(100);
+		if (!isDisplayFree(displayNum)) {
+			ready = true;
+			break;
+		}
+		// If Xvfb crashed during startup, fail fast.
+		if (proc.exitCode != null) {
+			throw new Error(
+				`Xvfb on ${display} exited during startup (code ${proc.exitCode}). Hint: install xvfb (apt-get install xvfb / yum install xorg-x11-server-Xvfb).`,
+			);
+		}
+	}
+	if (!ready) {
+		try {
+			proc.kill("SIGKILL");
+		} catch {
+			/* ignore */
+		}
+		throw new Error(
+			`Xvfb on ${display} never became reachable within 3s timeout`,
+		);
+	}
 
-  const startTime = readPidStartTime(proc.pid);
-  return {
-    pid: proc.pid,
-    startTime,
-    display,
-    close: () => cleanupXvfb({ pid: proc.pid, startTime, display }),
-  };
+	const startTime = readPidStartTime(proc.pid);
+	return {
+		pid: proc.pid,
+		startTime,
+		display,
+		close: () => cleanupXvfb({ pid: proc.pid, startTime, display }),
+	};
 }
 
 /**
@@ -170,18 +207,30 @@ export async function spawnXvfb(displayNum: number): Promise<XvfbHandle> {
  *
  * Best-effort: never throws.
  */
-export function cleanupXvfb(state: { pid: number; startTime: string; display: string }): void {
-  if (!state.pid) return;
-  if (!isOurXvfb(state.pid, state.startTime)) return;
-  try { safeKill(state.pid, 'SIGTERM'); } catch { /* swallow */ }
-  // Wait briefly for Xvfb to exit, then SIGKILL if still alive.
-  const deadline = Date.now() + 1000;
-  while (Date.now() < deadline) {
-    if (!isProcessAlive(state.pid)) break;
-  }
-  if (isProcessAlive(state.pid)) {
-    try { safeKill(state.pid, 'SIGKILL'); } catch { /* swallow */ }
-  }
+export function cleanupXvfb(state: {
+	pid: number;
+	startTime: string;
+	display: string;
+}): void {
+	if (!state.pid) return;
+	if (!isOurXvfb(state.pid, state.startTime)) return;
+	try {
+		safeKill(state.pid, "SIGTERM");
+	} catch {
+		/* swallow */
+	}
+	// Wait briefly for Xvfb to exit, then SIGKILL if still alive.
+	const deadline = Date.now() + 1000;
+	while (Date.now() < deadline) {
+		if (!isProcessAlive(state.pid)) break;
+	}
+	if (isProcessAlive(state.pid)) {
+		try {
+			safeKill(state.pid, "SIGKILL");
+		} catch {
+			/* swallow */
+		}
+	}
 }
 
 /**
@@ -189,5 +238,5 @@ export function cleanupXvfb(state: { pid: number; startTime: string; display: st
  * Used by server.ts when Xvfb isn't installed.
  */
 export function xvfbInstallHint(): string {
-  return 'Xvfb not installed. apt-get install xvfb (Debian/Ubuntu) or yum install xorg-x11-server-Xvfb (RHEL/CentOS). Note: minimal containers (alpine, distroless) may also need fonts, dbus, gtk libs for headed Chromium to render.';
+	return "Xvfb not installed. apt-get install xvfb (Debian/Ubuntu) or yum install xorg-x11-server-Xvfb (RHEL/CentOS). Note: minimal containers (alpine, distroless) may also need fonts, dbus, gtk libs for headed Chromium to render.";
 }

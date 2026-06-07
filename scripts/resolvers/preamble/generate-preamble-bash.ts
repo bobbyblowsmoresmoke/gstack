@@ -1,19 +1,19 @@
-import type { TemplateContext } from '../types';
-import { getHostConfig } from '../../../hosts/index';
+import { getHostConfig } from "../../../hosts/index";
+import type { TemplateContext } from "../types";
 
 export function generatePreambleBash(ctx: TemplateContext): string {
-  const hostConfig = getHostConfig(ctx.host);
-  const runtimeRoot = hostConfig.usesEnvVars
-    ? `_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+	const hostConfig = getHostConfig(ctx.host);
+	const runtimeRoot = hostConfig.usesEnvVars
+		? `_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 GSTACK_ROOT="$HOME/${hostConfig.globalRoot}"
 [ -n "$_ROOT" ] && [ -d "$_ROOT/${ctx.paths.localSkillRoot}" ] && GSTACK_ROOT="$_ROOT/${ctx.paths.localSkillRoot}"
 GSTACK_BIN="$GSTACK_ROOT/bin"
 GSTACK_BROWSE="$GSTACK_ROOT/browse/dist"
 GSTACK_DESIGN="$GSTACK_ROOT/design/dist"
 `
-    : '';
+		: "";
 
-  return `## Preamble (run first)
+	return `## Preamble (run first)
 
 \`\`\`bash
 ${runtimeRoot}_UPD=$(${ctx.paths.binDir}/gstack-update-check 2>/dev/null || ${ctx.paths.localSkillRoot}/bin/gstack-update-check 2>/dev/null || true)
@@ -85,12 +85,14 @@ if [ -d ".claude/skills/gstack" ] && [ ! -L ".claude/skills/gstack" ]; then
   fi
 fi
 echo "VENDORED_GSTACK: $_VENDORED"
-echo "MODEL_OVERLAY: ${ctx.model ?? 'none'}"
+echo "MODEL_OVERLAY: ${ctx.model ?? "none"}"
 _CHECKPOINT_MODE=$(${ctx.paths.binDir}/gstack-config get checkpoint_mode 2>/dev/null || echo "explicit")
 _CHECKPOINT_PUSH=$(${ctx.paths.binDir}/gstack-config get checkpoint_push 2>/dev/null || echo "false")
 echo "CHECKPOINT_MODE: $_CHECKPOINT_MODE"
 echo "CHECKPOINT_PUSH: $_CHECKPOINT_PUSH"
-[ -n "$OPENCLAW_SESSION" ] && echo "SPAWNED_SESSION: true" || true${ctx.host === 'gbrain' || ctx.host === 'hermes' ? `
+[ -n "$OPENCLAW_SESSION" ] && echo "SPAWNED_SESSION: true" || true${
+		ctx.host === "gbrain" || ctx.host === "hermes"
+			? `
 if command -v gbrain &>/dev/null; then
   _BRAIN_JSON=$(gbrain doctor --fast --json 2>/dev/null || echo '{}')
   _BRAIN_SCORE=$(echo "$_BRAIN_JSON" | grep -o '"health_score":[0-9]*' | cut -d: -f2)
@@ -100,6 +102,8 @@ if command -v gbrain &>/dev/null; then
   if [ "\${_BRAIN_SCORE:-100}" -lt 50 ] 2>/dev/null; then
     echo "$_BRAIN_JSON" | grep -o '"name":"[^"]*","status":"[^"]*","message":"[^"]*"' || true
   fi
-fi` : ''}
+fi`
+			: ""
+	}
 \`\`\``;
 }

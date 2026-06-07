@@ -36,33 +36,33 @@
  *   architecture_care:  0 = pragmatic, ship it      ↔  1 = principled, get it right
  */
 
-import { QUESTIONS } from './question-registry';
+import { QUESTIONS } from "./question-registry";
 
 /** The 5 dimensions of the developer psychographic. */
 export type Dimension =
-  | 'scope_appetite'
-  | 'risk_tolerance'
-  | 'detail_preference'
-  | 'autonomy'
-  | 'architecture_care';
+	| "scope_appetite"
+	| "risk_tolerance"
+	| "detail_preference"
+	| "autonomy"
+	| "architecture_care";
 
 export const ALL_DIMENSIONS: readonly Dimension[] = [
-  'scope_appetite',
-  'risk_tolerance',
-  'detail_preference',
-  'autonomy',
-  'architecture_care',
+	"scope_appetite",
+	"risk_tolerance",
+	"detail_preference",
+	"autonomy",
+	"architecture_care",
 ] as const;
 
 /**
  * Semantic version of the signal map. Increment when deltas change so that
  * cached profiles can detect staleness and recompute from events.
  */
-export const SIGNAL_MAP_VERSION = '0.1.0';
+export const SIGNAL_MAP_VERSION = "0.1.0";
 
 export interface DimensionDelta {
-  dim: Dimension;
-  delta: number;
+	dim: Dimension;
+	delta: number;
 }
 
 /**
@@ -74,136 +74,136 @@ export interface DimensionDelta {
  * expansion proposals AND office-hours approach selection).
  */
 export const SIGNAL_MAP: Record<string, Record<string, DimensionDelta[]>> = {
-  // -----------------------------------------------------------------------
-  // scope-appetite — how much the user likes to expand scope
-  // -----------------------------------------------------------------------
-  'scope-appetite': {
-    // plan-ceo-review mode choice
-    expand: [{ dim: 'scope_appetite', delta: +0.06 }],
-    selective: [{ dim: 'scope_appetite', delta: +0.03 }],
-    hold: [{ dim: 'scope_appetite', delta: -0.01 }],
-    reduce: [{ dim: 'scope_appetite', delta: -0.06 }],
-    // plan-ceo-review expansion proposal accepted/deferred/skipped
-    accept: [{ dim: 'scope_appetite', delta: +0.04 }],
-    defer: [{ dim: 'scope_appetite', delta: -0.01 }],
-    skip: [{ dim: 'scope_appetite', delta: -0.03 }],
-    // office-hours approach choice
-    minimal: [{ dim: 'scope_appetite', delta: -0.04 }],
-    ideal: [{ dim: 'scope_appetite', delta: +0.05 }],
-    creative: [{ dim: 'scope_appetite', delta: +0.02 }],
-  },
+	// -----------------------------------------------------------------------
+	// scope-appetite — how much the user likes to expand scope
+	// -----------------------------------------------------------------------
+	"scope-appetite": {
+		// plan-ceo-review mode choice
+		expand: [{ dim: "scope_appetite", delta: +0.06 }],
+		selective: [{ dim: "scope_appetite", delta: +0.03 }],
+		hold: [{ dim: "scope_appetite", delta: -0.01 }],
+		reduce: [{ dim: "scope_appetite", delta: -0.06 }],
+		// plan-ceo-review expansion proposal accepted/deferred/skipped
+		accept: [{ dim: "scope_appetite", delta: +0.04 }],
+		defer: [{ dim: "scope_appetite", delta: -0.01 }],
+		skip: [{ dim: "scope_appetite", delta: -0.03 }],
+		// office-hours approach choice
+		minimal: [{ dim: "scope_appetite", delta: -0.04 }],
+		ideal: [{ dim: "scope_appetite", delta: +0.05 }],
+		creative: [{ dim: "scope_appetite", delta: +0.02 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // architecture-care — how much the user sweats the details
-  // -----------------------------------------------------------------------
-  'architecture-care': {
-    'fix-now': [
-      { dim: 'architecture_care', delta: +0.05 },
-      { dim: 'risk_tolerance', delta: -0.02 },
-    ],
-    defer: [{ dim: 'architecture_care', delta: -0.02 }],
-    'accept-risk': [
-      { dim: 'architecture_care', delta: -0.04 },
-      { dim: 'risk_tolerance', delta: +0.04 },
-    ],
-  },
+	// -----------------------------------------------------------------------
+	// architecture-care — how much the user sweats the details
+	// -----------------------------------------------------------------------
+	"architecture-care": {
+		"fix-now": [
+			{ dim: "architecture_care", delta: +0.05 },
+			{ dim: "risk_tolerance", delta: -0.02 },
+		],
+		defer: [{ dim: "architecture_care", delta: -0.02 }],
+		"accept-risk": [
+			{ dim: "architecture_care", delta: -0.04 },
+			{ dim: "risk_tolerance", delta: +0.04 },
+		],
+	},
 
-  // -----------------------------------------------------------------------
-  // code-quality-care — proxies detail_preference + architecture_care
-  // -----------------------------------------------------------------------
-  'code-quality-care': {
-    'fix-now': [
-      { dim: 'detail_preference', delta: +0.02 },
-      { dim: 'architecture_care', delta: +0.03 },
-    ],
-    'ack-and-ship': [
-      { dim: 'risk_tolerance', delta: +0.03 },
-      { dim: 'architecture_care', delta: -0.02 },
-    ],
-    'false-positive': [{ dim: 'architecture_care', delta: +0.01 }],
-    defer: [{ dim: 'architecture_care', delta: -0.02 }],
-    skip: [{ dim: 'detail_preference', delta: -0.03 }],
-  },
+	// -----------------------------------------------------------------------
+	// code-quality-care — proxies detail_preference + architecture_care
+	// -----------------------------------------------------------------------
+	"code-quality-care": {
+		"fix-now": [
+			{ dim: "detail_preference", delta: +0.02 },
+			{ dim: "architecture_care", delta: +0.03 },
+		],
+		"ack-and-ship": [
+			{ dim: "risk_tolerance", delta: +0.03 },
+			{ dim: "architecture_care", delta: -0.02 },
+		],
+		"false-positive": [{ dim: "architecture_care", delta: +0.01 }],
+		defer: [{ dim: "architecture_care", delta: -0.02 }],
+		skip: [{ dim: "detail_preference", delta: -0.03 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // test-discipline — proxies architecture_care + detail_preference
-  // -----------------------------------------------------------------------
-  'test-discipline': {
-    'fix-now': [
-      { dim: 'architecture_care', delta: +0.04 },
-      { dim: 'detail_preference', delta: +0.02 },
-    ],
-    investigate: [{ dim: 'architecture_care', delta: +0.02 }],
-    'ack-and-ship': [
-      { dim: 'risk_tolerance', delta: +0.04 },
-      { dim: 'architecture_care', delta: -0.03 },
-    ],
-    'add-test': [
-      { dim: 'architecture_care', delta: +0.03 },
-      { dim: 'detail_preference', delta: +0.02 },
-    ],
-    defer: [{ dim: 'architecture_care', delta: -0.01 }],
-    skip: [{ dim: 'architecture_care', delta: -0.04 }],
-  },
+	// -----------------------------------------------------------------------
+	// test-discipline — proxies architecture_care + detail_preference
+	// -----------------------------------------------------------------------
+	"test-discipline": {
+		"fix-now": [
+			{ dim: "architecture_care", delta: +0.04 },
+			{ dim: "detail_preference", delta: +0.02 },
+		],
+		investigate: [{ dim: "architecture_care", delta: +0.02 }],
+		"ack-and-ship": [
+			{ dim: "risk_tolerance", delta: +0.04 },
+			{ dim: "architecture_care", delta: -0.03 },
+		],
+		"add-test": [
+			{ dim: "architecture_care", delta: +0.03 },
+			{ dim: "detail_preference", delta: +0.02 },
+		],
+		defer: [{ dim: "architecture_care", delta: -0.01 }],
+		skip: [{ dim: "architecture_care", delta: -0.04 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // detail-preference — direct signal for verbosity
-  // -----------------------------------------------------------------------
-  'detail-preference': {
-    accept: [{ dim: 'detail_preference', delta: +0.03 }],
-    skip: [{ dim: 'detail_preference', delta: -0.03 }],
-  },
+	// -----------------------------------------------------------------------
+	// detail-preference — direct signal for verbosity
+	// -----------------------------------------------------------------------
+	"detail-preference": {
+		accept: [{ dim: "detail_preference", delta: +0.03 }],
+		skip: [{ dim: "detail_preference", delta: -0.03 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // design-care — proxies architecture_care for UI-facing work
-  // -----------------------------------------------------------------------
-  'design-care': {
-    expand: [{ dim: 'architecture_care', delta: +0.04 }],
-    polish: [{ dim: 'architecture_care', delta: +0.02 }],
-    triage: [{ dim: 'architecture_care', delta: -0.02 }],
-    'fix-now': [{ dim: 'architecture_care', delta: +0.02 }],
-    defer: [{ dim: 'architecture_care', delta: -0.01 }],
-    skip: [{ dim: 'architecture_care', delta: -0.03 }],
-  },
+	// -----------------------------------------------------------------------
+	// design-care — proxies architecture_care for UI-facing work
+	// -----------------------------------------------------------------------
+	"design-care": {
+		expand: [{ dim: "architecture_care", delta: +0.04 }],
+		polish: [{ dim: "architecture_care", delta: +0.02 }],
+		triage: [{ dim: "architecture_care", delta: -0.02 }],
+		"fix-now": [{ dim: "architecture_care", delta: +0.02 }],
+		defer: [{ dim: "architecture_care", delta: -0.01 }],
+		skip: [{ dim: "architecture_care", delta: -0.03 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // devex-care — DX is UX for developers; proxies architecture_care
-  // -----------------------------------------------------------------------
-  'devex-care': {
-    expand: [{ dim: 'architecture_care', delta: +0.04 }],
-    polish: [{ dim: 'architecture_care', delta: +0.02 }],
-    triage: [{ dim: 'architecture_care', delta: -0.02 }],
-    'fix-now': [{ dim: 'architecture_care', delta: +0.02 }],
-    defer: [{ dim: 'architecture_care', delta: -0.01 }],
-    skip: [{ dim: 'architecture_care', delta: -0.03 }],
-  },
+	// -----------------------------------------------------------------------
+	// devex-care — DX is UX for developers; proxies architecture_care
+	// -----------------------------------------------------------------------
+	"devex-care": {
+		expand: [{ dim: "architecture_care", delta: +0.04 }],
+		polish: [{ dim: "architecture_care", delta: +0.02 }],
+		triage: [{ dim: "architecture_care", delta: -0.02 }],
+		"fix-now": [{ dim: "architecture_care", delta: +0.02 }],
+		defer: [{ dim: "architecture_care", delta: -0.01 }],
+		skip: [{ dim: "architecture_care", delta: -0.03 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // distribution-care — does the user care about how code reaches users?
-  // -----------------------------------------------------------------------
-  'distribution-care': {
-    accept: [{ dim: 'architecture_care', delta: +0.03 }],
-    defer: [{ dim: 'architecture_care', delta: -0.02 }],
-    skip: [{ dim: 'architecture_care', delta: -0.04 }],
-  },
+	// -----------------------------------------------------------------------
+	// distribution-care — does the user care about how code reaches users?
+	// -----------------------------------------------------------------------
+	"distribution-care": {
+		accept: [{ dim: "architecture_care", delta: +0.03 }],
+		defer: [{ dim: "architecture_care", delta: -0.02 }],
+		skip: [{ dim: "architecture_care", delta: -0.04 }],
+	},
 
-  // -----------------------------------------------------------------------
-  // session-mode — office-hours goal selection
-  // -----------------------------------------------------------------------
-  'session-mode': {
-    startup: [
-      { dim: 'scope_appetite', delta: +0.02 },
-      { dim: 'architecture_care', delta: +0.02 },
-    ],
-    intrapreneur: [{ dim: 'scope_appetite', delta: +0.02 }],
-    hackathon: [
-      { dim: 'risk_tolerance', delta: +0.03 },
-      { dim: 'architecture_care', delta: -0.02 },
-    ],
-    'oss-research': [{ dim: 'architecture_care', delta: +0.02 }],
-    learning: [{ dim: 'detail_preference', delta: +0.02 }],
-    fun: [{ dim: 'risk_tolerance', delta: +0.02 }],
-  },
+	// -----------------------------------------------------------------------
+	// session-mode — office-hours goal selection
+	// -----------------------------------------------------------------------
+	"session-mode": {
+		startup: [
+			{ dim: "scope_appetite", delta: +0.02 },
+			{ dim: "architecture_care", delta: +0.02 },
+		],
+		intrapreneur: [{ dim: "scope_appetite", delta: +0.02 }],
+		hackathon: [
+			{ dim: "risk_tolerance", delta: +0.03 },
+			{ dim: "architecture_care", delta: -0.02 },
+		],
+		"oss-research": [{ dim: "architecture_care", delta: +0.02 }],
+		learning: [{ dim: "detail_preference", delta: +0.02 }],
+		fun: [{ dim: "risk_tolerance", delta: +0.02 }],
+	},
 };
 
 /**
@@ -215,18 +215,18 @@ export const SIGNAL_MAP: Record<string, Record<string, DimensionDelta[]>> = {
  * @returns list of dimension deltas applied (empty if no mapping)
  */
 export function applySignal(
-  dims: Record<Dimension, number>,
-  signal_key: string,
-  user_choice: string,
+	dims: Record<Dimension, number>,
+	signal_key: string,
+	user_choice: string,
 ): DimensionDelta[] {
-  const subMap = SIGNAL_MAP[signal_key];
-  if (!subMap) return [];
-  const deltas = subMap[user_choice];
-  if (!deltas) return [];
-  for (const { dim, delta } of deltas) {
-    dims[dim] = (dims[dim] ?? 0) + delta;
-  }
-  return deltas;
+	const subMap = SIGNAL_MAP[signal_key];
+	if (!subMap) return [];
+	const deltas = subMap[user_choice];
+	if (!deltas) return [];
+	for (const { dim, delta } of deltas) {
+		dims[dim] = (dims[dim] ?? 0) + delta;
+	}
+	return deltas;
 }
 
 /**
@@ -234,39 +234,39 @@ export function applySignal(
  * entry in SIGNAL_MAP. Called by tests to catch drift.
  */
 export function validateRegistrySignalKeys(): {
-  missing: string[];
-  extra: string[];
+	missing: string[];
+	extra: string[];
 } {
-  const registrySignalKeys = new Set<string>();
-  for (const q of Object.values(QUESTIONS)) {
-    if (q.signal_key) registrySignalKeys.add(q.signal_key);
-  }
-  const mapKeys = new Set(Object.keys(SIGNAL_MAP));
-  const missing: string[] = [];
-  const extra: string[] = [];
-  for (const k of registrySignalKeys) {
-    if (!mapKeys.has(k)) missing.push(k);
-  }
-  for (const k of mapKeys) {
-    if (!registrySignalKeys.has(k)) extra.push(k);
-  }
-  return { missing, extra };
+	const registrySignalKeys = new Set<string>();
+	for (const q of Object.values(QUESTIONS)) {
+		if (q.signal_key) registrySignalKeys.add(q.signal_key);
+	}
+	const mapKeys = new Set(Object.keys(SIGNAL_MAP));
+	const missing: string[] = [];
+	const extra: string[] = [];
+	for (const k of registrySignalKeys) {
+		if (!mapKeys.has(k)) missing.push(k);
+	}
+	for (const k of mapKeys) {
+		if (!registrySignalKeys.has(k)) extra.push(k);
+	}
+	return { missing, extra };
 }
 
 /** Empty dimension totals — starting point for derivation. */
 export function newDimensionTotals(): Record<Dimension, number> {
-  return {
-    scope_appetite: 0,
-    risk_tolerance: 0,
-    detail_preference: 0,
-    autonomy: 0,
-    architecture_care: 0,
-  };
+	return {
+		scope_appetite: 0,
+		risk_tolerance: 0,
+		detail_preference: 0,
+		autonomy: 0,
+		architecture_care: 0,
+	};
 }
 
 /** Sigmoid clamp: map accumulated delta total to [0, 1]. */
 export function normalizeToDimensionValue(total: number): number {
-  // Simple sigmoid: each 1.0 of accumulated delta approaches saturation.
-  // 0.5 is neutral. Positive deltas push toward 1, negative toward 0.
-  return 1 / (1 + Math.exp(-total * 3));
+	// Simple sigmoid: each 1.0 of accumulated delta approaches saturation.
+	// 0.5 is neutral. Positive deltas push toward 1, negative toward 0.
+	return 1 / (1 + Math.exp(-total * 3));
 }

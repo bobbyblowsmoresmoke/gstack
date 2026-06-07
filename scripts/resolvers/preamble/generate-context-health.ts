@@ -1,7 +1,5 @@
-
-
 export function generateContextHealth(): string {
-  return `## Context Health (soft directive)
+	return `## Context Health (soft directive)
 
 During long-running skill sessions, periodically write a brief \`[PROGRESS]\` summary: done, next, surprises.
 

@@ -36,22 +36,22 @@
  * their runner / share setup.
  */
 
-import { execFileSync } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
+import { execFileSync } from "child_process";
+import * as fs from "fs";
+import * as os from "os";
 
 let warnedOnce = false;
 
 function warnIcaclsFailure(fsPath: string, err: unknown): void {
-  if (warnedOnce) return;
-  warnedOnce = true;
-  const msg = err instanceof Error ? err.message : String(err);
-  // biome-ignore lint/suspicious/noConsole: intentional user-facing warning
-  console.warn(
-    `[gstack] Failed to restrict Windows ACL on ${fsPath}: ${msg}\n` +
-    `  Sensitive files may be readable by other accounts on this machine.\n` +
-    `  This warning appears once per process; subsequent failures are silent.`
-  );
+	if (warnedOnce) return;
+	warnedOnce = true;
+	const msg = err instanceof Error ? err.message : String(err);
+	// biome-ignore lint/suspicious/noConsole: intentional user-facing warning
+	console.warn(
+		`[gstack] Failed to restrict Windows ACL on ${fsPath}: ${msg}\n` +
+			`  Sensitive files may be readable by other accounts on this machine.\n` +
+			`  This warning appears once per process; subsequent failures are silent.`,
+	);
 }
 
 /**
@@ -65,20 +65,24 @@ function warnIcaclsFailure(fsPath: string, err: unknown): void {
  * current user full control.
  */
 export function restrictFilePermissions(filePath: string): void {
-  if (process.platform === 'win32') {
-    try {
-      const user = os.userInfo().username;
-      execFileSync(
-        'icacls',
-        [filePath, '/inheritance:r', '/grant:r', `${user}:(F)`],
-        { stdio: 'ignore' },
-      );
-    } catch (err) {
-      warnIcaclsFailure(filePath, err);
-    }
-    return;
-  }
-  try { fs.chmodSync(filePath, 0o600); } catch { /* best-effort */ }
+	if (process.platform === "win32") {
+		try {
+			const user = os.userInfo().username;
+			execFileSync(
+				"icacls",
+				[filePath, "/inheritance:r", "/grant:r", `${user}:(F)`],
+				{ stdio: "ignore" },
+			);
+		} catch (err) {
+			warnIcaclsFailure(filePath, err);
+		}
+		return;
+	}
+	try {
+		fs.chmodSync(filePath, 0o600);
+	} catch {
+		/* best-effort */
+	}
 }
 
 /**
@@ -95,20 +99,24 @@ export function restrictFilePermissions(filePath: string): void {
  * `restrictFilePermissions` still end up owner-only.
  */
 export function restrictDirectoryPermissions(dirPath: string): void {
-  if (process.platform === 'win32') {
-    try {
-      const user = os.userInfo().username;
-      execFileSync(
-        'icacls',
-        [dirPath, '/inheritance:r', '/grant:r', `${user}:(OI)(CI)(F)`],
-        { stdio: 'ignore' },
-      );
-    } catch (err) {
-      warnIcaclsFailure(dirPath, err);
-    }
-    return;
-  }
-  try { fs.chmodSync(dirPath, 0o700); } catch { /* best-effort */ }
+	if (process.platform === "win32") {
+		try {
+			const user = os.userInfo().username;
+			execFileSync(
+				"icacls",
+				[dirPath, "/inheritance:r", "/grant:r", `${user}:(OI)(CI)(F)`],
+				{ stdio: "ignore" },
+			);
+		} catch (err) {
+			warnIcaclsFailure(dirPath, err);
+		}
+		return;
+	}
+	try {
+		fs.chmodSync(dirPath, 0o700);
+	} catch {
+		/* best-effort */
+	}
 }
 
 /**
@@ -116,11 +124,11 @@ export function restrictDirectoryPermissions(dirPath: string): void {
  * Replaces `fs.writeFileSync(path, data, { mode: 0o600 })` + Windows ACL.
  */
 export function writeSecureFile(
-  filePath: string,
-  data: string | NodeJS.ArrayBufferView,
+	filePath: string,
+	data: string | NodeJS.ArrayBufferView,
 ): void {
-  fs.writeFileSync(filePath, data, { mode: 0o600 });
-  restrictFilePermissions(filePath);
+	fs.writeFileSync(filePath, data, { mode: 0o600 });
+	restrictFilePermissions(filePath);
 }
 
 /**
@@ -131,12 +139,12 @@ export function writeSecureFile(
  * (no need to re-run icacls on every log line).
  */
 export function appendSecureFile(
-  filePath: string,
-  data: string | NodeJS.ArrayBufferView,
+	filePath: string,
+	data: string | NodeJS.ArrayBufferView,
 ): void {
-  const existed = fs.existsSync(filePath);
-  fs.appendFileSync(filePath, data, { mode: 0o600 });
-  if (!existed) restrictFilePermissions(filePath);
+	const existed = fs.existsSync(filePath);
+	fs.appendFileSync(filePath, data as any, { mode: 0o600 });
+	if (!existed) restrictFilePermissions(filePath);
 }
 
 /**
@@ -145,13 +153,13 @@ export function appendSecureFile(
  * Safe to call on an existing directory — re-applies the ACL idempotently.
  */
 export function mkdirSecure(dirPath: string): void {
-  fs.mkdirSync(dirPath, { recursive: true, mode: 0o700 });
-  restrictDirectoryPermissions(dirPath);
+	fs.mkdirSync(dirPath, { recursive: true, mode: 0o700 });
+	restrictDirectoryPermissions(dirPath);
 }
 
 /**
  * Reset the once-per-process warning gate. Test-only.
  */
 export function __resetWarnedForTests(): void {
-  warnedOnce = false;
+	warnedOnce = false;
 }

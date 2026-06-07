@@ -10,10 +10,10 @@
  *
  * Compatible with GBrain >= v0.10.0 (search CLI, doctor --fast --json, entity enrichment).
  */
-import type { TemplateContext } from './types';
+import type { TemplateContext } from "./types";
 
 export function generateGBrainContextLoad(ctx: TemplateContext): string {
-  let base = `## Brain Context Load
+	let base = `## Brain Context Load
 
 Before starting this skill, search your brain for relevant context:
 
@@ -29,28 +29,36 @@ Before starting this skill, search your brain for relevant context:
 If GBrain is not available or returns no results, proceed without brain context.
 Any non-zero exit code from gbrain commands should be treated as a transient failure.`;
 
-  if (ctx.skillName === 'investigate') {
-    base += `\n\nIf the user's request is about tracking, extracting, or researching structured data (e.g., "track this data", "extract from emails", "build a tracker"), route to GBrain's data-research skill instead: \`gbrain call data-research\`. This skill has a 7-phase pipeline optimized for structured data extraction.`;
-  }
+	if (ctx.skillName === "investigate") {
+		base += `\n\nIf the user's request is about tracking, extracting, or researching structured data (e.g., "track this data", "extract from emails", "build a tracker"), route to GBrain's data-research skill instead: \`gbrain call data-research\`. This skill has a 7-phase pipeline optimized for structured data extraction.`;
+	}
 
-  return base;
+	return base;
 }
 
 export function generateGBrainSaveResults(ctx: TemplateContext): string {
-  const skillSaveMap: Record<string, string> = {
-    'office-hours': 'Save the design document as a brain page:\n```bash\ngbrain put_page --title "Office Hours: <project name>" --tags "design-doc,<project-slug>" <<\'EOF\'\n<design doc content in markdown>\nEOF\n```',
-    'investigate': 'Save the root cause analysis as a brain page:\n```bash\ngbrain put_page --title "Investigation: <issue summary>" --tags "investigation,<affected-files>" <<\'EOF\'\n<investigation findings in markdown>\nEOF\n```',
-    'plan-ceo-review': 'Save the CEO plan as a brain page:\n```bash\ngbrain put_page --title "CEO Plan: <feature name>" --tags "ceo-plan,<feature-slug>" <<\'EOF\'\n<scope decisions and vision in markdown>\nEOF\n```',
-    'retro': 'Save the retrospective as a brain page:\n```bash\ngbrain put_page --title "Retro: <date range>" --tags "retro,<date>" <<\'EOF\'\n<retro output in markdown>\nEOF\n```',
-    'plan-eng-review': 'Save the architecture decisions as a brain page:\n```bash\ngbrain put_page --title "Eng Review: <feature name>" --tags "eng-review,<feature-slug>" <<\'EOF\'\n<review findings and decisions in markdown>\nEOF\n```',
-    'ship': 'Save the release notes as a brain page:\n```bash\ngbrain put_page --title "Release: <version>" --tags "release,<version>" <<\'EOF\'\n<changelog entry and deploy details in markdown>\nEOF\n```',
-    'cso': 'Save the security audit as a brain page:\n```bash\ngbrain put_page --title "Security Audit: <date>" --tags "security-audit,<date>" <<\'EOF\'\n<findings and remediation status in markdown>\nEOF\n```',
-    'design-consultation': 'Save the design system as a brain page:\n```bash\ngbrain put_page --title "Design System: <project name>" --tags "design-system,<project-slug>" <<\'EOF\'\n<design decisions in markdown>\nEOF\n```',
-  };
+	const skillSaveMap: Record<string, string> = {
+		"office-hours":
+			'Save the design document as a brain page:\n```bash\ngbrain put_page --title "Office Hours: <project name>" --tags "design-doc,<project-slug>" <<\'EOF\'\n<design doc content in markdown>\nEOF\n```',
+		investigate:
+			'Save the root cause analysis as a brain page:\n```bash\ngbrain put_page --title "Investigation: <issue summary>" --tags "investigation,<affected-files>" <<\'EOF\'\n<investigation findings in markdown>\nEOF\n```',
+		"plan-ceo-review":
+			'Save the CEO plan as a brain page:\n```bash\ngbrain put_page --title "CEO Plan: <feature name>" --tags "ceo-plan,<feature-slug>" <<\'EOF\'\n<scope decisions and vision in markdown>\nEOF\n```',
+		retro:
+			'Save the retrospective as a brain page:\n```bash\ngbrain put_page --title "Retro: <date range>" --tags "retro,<date>" <<\'EOF\'\n<retro output in markdown>\nEOF\n```',
+		"plan-eng-review":
+			'Save the architecture decisions as a brain page:\n```bash\ngbrain put_page --title "Eng Review: <feature name>" --tags "eng-review,<feature-slug>" <<\'EOF\'\n<review findings and decisions in markdown>\nEOF\n```',
+		ship: 'Save the release notes as a brain page:\n```bash\ngbrain put_page --title "Release: <version>" --tags "release,<version>" <<\'EOF\'\n<changelog entry and deploy details in markdown>\nEOF\n```',
+		cso: 'Save the security audit as a brain page:\n```bash\ngbrain put_page --title "Security Audit: <date>" --tags "security-audit,<date>" <<\'EOF\'\n<findings and remediation status in markdown>\nEOF\n```',
+		"design-consultation":
+			'Save the design system as a brain page:\n```bash\ngbrain put_page --title "Design System: <project name>" --tags "design-system,<project-slug>" <<\'EOF\'\n<design decisions in markdown>\nEOF\n```',
+	};
 
-  const saveInstruction = skillSaveMap[ctx.skillName] || 'Save the skill output as a brain page if the results are worth preserving:\n```bash\ngbrain put_page --title "<descriptive title>" --tags "<relevant,tags>" <<\'EOF\'\n<content in markdown>\nEOF\n```';
+	const saveInstruction =
+		skillSaveMap[ctx.skillName] ||
+		'Save the skill output as a brain page if the results are worth preserving:\n```bash\ngbrain put_page --title "<descriptive title>" --tags "<relevant,tags>" <<\'EOF\'\n<content in markdown>\nEOF\n```';
 
-  return `## Save Results to Brain
+	return `## Save Results to Brain
 
 After completing this skill, persist the results to your brain for future reference:
 

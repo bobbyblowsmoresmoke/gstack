@@ -10,23 +10,24 @@ import fs from "fs";
 import path from "path";
 
 export interface CompareOptions {
-  images: string[];
-  output: string;
+	images: string[];
+	output: string;
 }
 
 /**
  * Generate the comparison board HTML page.
  */
 export function generateCompareHtml(images: string[]): string {
-  const variantLabels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	const variantLabels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  const variantCards = images.map((imgPath, i) => {
-    const label = variantLabels[i] || `${i + 1}`;
-    // Embed images as base64 data URIs for self-contained HTML
-    const imgData = fs.readFileSync(imgPath).toString("base64");
-    const ext = path.extname(imgPath).slice(1) || "png";
+	const variantCards = images
+		.map((imgPath, i) => {
+			const label = variantLabels[i] || `${i + 1}`;
+			// Embed images as base64 data URIs for self-contained HTML
+			const imgData = fs.readFileSync(imgPath).toString("base64");
+			const ext = path.extname(imgPath).slice(1) || "png";
 
-    return `
+			return `
     <div class="variant" data-variant="${label}">
       <div class="variant-header">
         <span class="variant-label">Option ${label}</span>
@@ -40,16 +41,17 @@ export function generateCompareHtml(images: string[]): string {
           <span class="pick-confirm" style="display:none;">We'll move forward with Option ${label}</span>
         </label>
         <div class="stars" data-variant="${label}">
-          ${[1,2,3,4,5].map(n => `<span class="star" data-value="${n}">★</span>`).join("")}
+          ${[1, 2, 3, 4, 5].map((n) => `<span class="star" data-value="${n}">★</span>`).join("")}
         </div>
         <input type="text" class="feedback-input" data-variant="${label}"
                placeholder="What do you like/dislike?" />
         <button class="more-like-this" data-variant="${label}">More like this</button>
       </div>
     </div>`;
-  }).join("\n");
+		})
+		.join("\n");
 
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -620,9 +622,14 @@ export function generateCompareHtml(images: string[]): string {
  * Compare command: generate comparison board HTML from image files.
  */
 export function compare(options: CompareOptions): void {
-  const html = generateCompareHtml(options.images);
-  const outputDir = path.dirname(options.output);
-  fs.mkdirSync(outputDir, { recursive: true });
-  fs.writeFileSync(options.output, html);
-  console.log(JSON.stringify({ outputPath: options.output, variants: options.images.length }));
+	const html = generateCompareHtml(options.images);
+	const outputDir = path.dirname(options.output);
+	fs.mkdirSync(outputDir, { recursive: true });
+	fs.writeFileSync(options.output, html);
+	console.log(
+		JSON.stringify({
+			outputPath: options.output,
+			variants: options.images.length,
+		}),
+	);
 }

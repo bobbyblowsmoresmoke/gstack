@@ -1,7 +1,5 @@
-
-
 export function generateCompletenessSection(): string {
-  return `## Completeness Principle — Boil the Lake
+	return `## Completeness Principle — Boil the Lake
 
 AI makes completeness cheap. Recommend complete lakes (tests, edge cases, error paths); flag oceans (rewrites, multi-quarter migrations).
 
