@@ -21,53 +21,57 @@
  * classifier returns degraded:true) rather than throw.
  */
 
-import * as path from 'path';
+import * as path from "path";
 
 export interface ClaudeCommand {
-  command: string;
-  argsPrefix: string[];
+	command: string;
+	argsPrefix: string[];
 }
 
 function stripWrappingQuotes(value: string): string {
-  return value.replace(/^"(.*)"$/, '$1');
+	return value.replace(/^"(.*)"$/, "$1");
 }
 
 function parseOverrideArgs(env: NodeJS.ProcessEnv): string[] {
-  const raw = env.GSTACK_CLAUDE_BIN_ARGS ?? env.CLAUDE_BIN_ARGS;
-  if (!raw?.trim()) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string')) {
-      return parsed;
-    }
-  } catch {
-    // Not JSON — treat as a single scalar argument.
-  }
-  return [stripWrappingQuotes(raw.trim())];
+	const raw = env.GSTACK_CLAUDE_BIN_ARGS ?? env.CLAUDE_BIN_ARGS;
+	if (!raw?.trim()) return [];
+	try {
+		const parsed = JSON.parse(raw);
+		if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+			return parsed;
+		}
+	} catch {
+		// Not JSON — treat as a single scalar argument.
+	}
+	return [stripWrappingQuotes(raw.trim())];
 }
 
 export function resolveClaudeCommand(
-  env: NodeJS.ProcessEnv = process.env,
+	env: NodeJS.ProcessEnv = process.env,
 ): ClaudeCommand | null {
-  const argsPrefix = parseOverrideArgs(env);
-  const override = (env.GSTACK_CLAUDE_BIN ?? env.CLAUDE_BIN)?.trim();
-  // Honor case-insensitive Path/PATH on Windows. Bun.which itself reads
-  // process.env so we forward whichever the caller passed.
-  const PATH = env.PATH ?? env.Path ?? '';
+	const argsPrefix = parseOverrideArgs(env);
+	const override = (env.GSTACK_CLAUDE_BIN ?? env.CLAUDE_BIN)?.trim();
+	// Honor case-insensitive Path/PATH on Windows. Bun.which itself reads
+	// process.env so we forward whichever the caller passed.
+	const PATH = env.PATH ?? env.Path ?? "";
 
-  if (override) {
-    const trimmed = stripWrappingQuotes(override);
-    // Absolute path: use as-is. Otherwise PATH-resolve through Bun.which so
-    // overrides like GSTACK_CLAUDE_BIN=wsl find the actual binary.
-    const resolved = path.isAbsolute(trimmed) ? trimmed : Bun.which(trimmed, { PATH });
-    return resolved ? { command: resolved, argsPrefix } : null;
-  }
+	if (override) {
+		const trimmed = stripWrappingQuotes(override);
+		// Absolute path: use as-is. Otherwise PATH-resolve through Bun.which so
+		// overrides like GSTACK_CLAUDE_BIN=wsl find the actual binary.
+		const resolved = path.isAbsolute(trimmed)
+			? trimmed
+			: Bun.which(trimmed, { PATH });
+		return resolved ? { command: resolved, argsPrefix } : null;
+	}
 
-  const command = Bun.which('claude', { PATH });
-  return command ? { command, argsPrefix: [] } : null;
+	const command = Bun.which("claude", { PATH });
+	return command ? { command, argsPrefix: [] } : null;
 }
 
 /** Convenience wrapper for callers that only need the command path. */
-export function resolveClaudeBinary(env: NodeJS.ProcessEnv = process.env): string | null {
-  return resolveClaudeCommand(env)?.command ?? null;
+export function resolveClaudeBinary(
+	env: NodeJS.ProcessEnv = process.env,
+): string | null {
+	return resolveClaudeCommand(env)?.command ?? null;
 }

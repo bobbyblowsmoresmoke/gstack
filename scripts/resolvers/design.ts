@@ -1,11 +1,22 @@
-import type { TemplateContext } from './types';
-import { AI_SLOP_BLACKLIST, OPENAI_HARD_REJECTIONS, OPENAI_LITMUS_CHECKS } from './constants';
+import {
+	AI_SLOP_BLACKLIST,
+	OPENAI_HARD_REJECTIONS,
+	OPENAI_LITMUS_CHECKS,
+} from "./constants";
+import type { TemplateContext } from "./types";
 
 export function generateDesignReviewLite(ctx: TemplateContext): string {
-  const litmusList = OPENAI_LITMUS_CHECKS.map((item, i) => `${i + 1}. ${item}`).join(' ');
-  const rejectionList = OPENAI_HARD_REJECTIONS.map((item, i) => `${i + 1}. ${item}`).join(' ');
-  // Codex block only for Claude host
-  const codexBlock = ctx.host === 'codex' ? '' : `
+	const litmusList = OPENAI_LITMUS_CHECKS.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join(" ");
+	const rejectionList = OPENAI_HARD_REJECTIONS.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join(" ");
+	// Codex block only for Claude host
+	const codexBlock =
+		ctx.host === "codex"
+			? ""
+			: `
 
 7. **Codex design voice** (optional, automatic if available):
 
@@ -30,7 +41,7 @@ cat "$TMPERR_DRL" && rm -f "$TMPERR_DRL"
 
 Present Codex output under a \`CODEX (design):\` header, merged with the checklist findings above.`;
 
-  return `## Design Review (conditional, diff-scoped)
+	return `## Design Review (conditional, diff-scoped)
 
 Check if the diff touches frontend files using \`gstack-diff-scope\`:
 
@@ -67,7 +78,7 @@ Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "is
 // NOTE: design-checklist.md is a subset of this methodology for code-level detection.
 // When adding items here, also update review/design-checklist.md, and vice versa.
 export function generateDesignMethodology(_ctx: TemplateContext): string {
-  return `## Modes
+	return `## Modes
 
 ### Full (default)
 Systematic review of all pages reachable from homepage. Visit 5-8 pages. Full checklist evaluation, responsive screenshots, interaction flow testing. Produces complete design audit report with letter grades.
@@ -279,7 +290,7 @@ Apply these at each page. Each finding gets an impact rating (high/medium/polish
 
 The test: would a human designer at a respected studio ever ship this?
 
-${AI_SLOP_BLACKLIST.map(item => `- ${item}`).join('\n')}
+${AI_SLOP_BLACKLIST.map((item) => `- ${item}`).join("\n")}
 
 **10. Performance as Design** (6 items)
 - LCP < 2.0s (web apps), < 1.5s (informational sites)
@@ -449,7 +460,7 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 }
 
 export function generateDesignSketch(_ctx: TemplateContext): string {
-  return `## Visual Sketch (UI ideas only)
+	return `## Visual Sketch (UI ideas only)
 
 If the chosen approach involves user-facing UI (screens, pages, forms, dashboards,
 or interactive elements), generate a rough wireframe to help the user visualize it.
@@ -539,27 +550,31 @@ Error handling: all non-blocking. On failure, skip and continue.`;
 }
 
 export function generateDesignOutsideVoices(ctx: TemplateContext): string {
-  // Codex host: strip entirely — Codex should never invoke itself
-  if (ctx.host === 'codex') return '';
+	// Codex host: strip entirely — Codex should never invoke itself
+	if (ctx.host === "codex") return "";
 
-  const rejectionList = OPENAI_HARD_REJECTIONS.map((item, i) => `${i + 1}. ${item}`).join('\n');
-  const litmusList = OPENAI_LITMUS_CHECKS.map((item, i) => `${i + 1}. ${item}`).join('\n');
+	const rejectionList = OPENAI_HARD_REJECTIONS.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join("\n");
+	const litmusList = OPENAI_LITMUS_CHECKS.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join("\n");
 
-  // Skill-specific configuration
-  const isPlanDesignReview = ctx.skillName === 'plan-design-review';
-  const isDesignReview = ctx.skillName === 'design-review';
-  const isDesignConsultation = ctx.skillName === 'design-consultation';
+	// Skill-specific configuration
+	const isPlanDesignReview = ctx.skillName === "plan-design-review";
+	const isDesignReview = ctx.skillName === "design-review";
+	const isDesignConsultation = ctx.skillName === "design-consultation";
 
-  // Determine opt-in behavior and reasoning effort
-  const isAutomatic = isDesignReview; // design-review runs automatically
-  const reasoningEffort = isDesignConsultation ? 'medium' : 'high'; // creative vs analytical
+	// Determine opt-in behavior and reasoning effort
+	const isAutomatic = isDesignReview; // design-review runs automatically
+	const reasoningEffort = isDesignConsultation ? "medium" : "high"; // creative vs analytical
 
-  // Build skill-specific Codex prompt
-  let codexPrompt: string;
-  let subagentPrompt: string;
+	// Build skill-specific Codex prompt
+	let codexPrompt: string;
+	let subagentPrompt: string;
 
-  if (isPlanDesignReview) {
-    codexPrompt = `Read the plan file at [plan-file-path]. Evaluate this plan's UI/UX design against these criteria.
+	if (isPlanDesignReview) {
+		codexPrompt = `Read the plan file at [plan-file-path]. Evaluate this plan's UI/UX design against these criteria.
 
 HARD REJECTION — flag if ANY apply:
 ${rejectionList}
@@ -574,7 +589,7 @@ HARD RULES — first classify as MARKETING/LANDING PAGE vs APP UI vs HYBRID, the
 
 For each finding: what's wrong, what will happen if it ships unresolved, and the specific fix. Be opinionated. No hedging.`;
 
-    subagentPrompt = `Read the plan file at [plan-file-path]. You are an independent senior product designer reviewing this plan. You have NOT seen any prior review. Evaluate:
+		subagentPrompt = `Read the plan file at [plan-file-path]. You are an independent senior product designer reviewing this plan. You have NOT seen any prior review. Evaluate:
 
 1. Information hierarchy: what does the user see first, second, third? Is it right?
 2. Missing states: loading, empty, error, success, partial — which are unspecified?
@@ -583,8 +598,8 @@ For each finding: what's wrong, what will happen if it ships unresolved, and the
 5. What design decisions will haunt the implementer if left ambiguous?
 
 For each finding: what's wrong, severity (critical/high/medium), and the fix.`;
-  } else if (isDesignReview) {
-    codexPrompt = `Review the frontend source code in this repo. Evaluate against these design hard rules:
+	} else if (isDesignReview) {
+		codexPrompt = `Review the frontend source code in this repo. Evaluate against these design hard rules:
 - Spacing: systematic (design tokens / CSS variables) or magic numbers?
 - Typography: expressive purposeful fonts or default stacks?
 - Color: CSS variables with defined system, or hardcoded hex scattered?
@@ -603,15 +618,15 @@ ${rejectionList}
 
 Be specific. Reference file:line for every finding.`;
 
-    subagentPrompt = `Review the frontend source code in this repo. You are an independent senior product designer doing a source-code design audit. Focus on CONSISTENCY PATTERNS across files rather than individual violations:
+		subagentPrompt = `Review the frontend source code in this repo. You are an independent senior product designer doing a source-code design audit. Focus on CONSISTENCY PATTERNS across files rather than individual violations:
 - Are spacing values systematic across the codebase?
 - Is there ONE color system or scattered approaches?
 - Do responsive breakpoints follow a consistent set?
 - Is the accessibility approach consistent or spotty?
 
 For each finding: what's wrong, severity (critical/high/medium), and the file:line.`;
-  } else if (isDesignConsultation) {
-    codexPrompt = `Given this product context, propose a complete design direction:
+	} else if (isDesignConsultation) {
+		codexPrompt = `Given this product context, propose a complete design direction:
 - Visual thesis: one sentence describing mood, material, and energy
 - Typography: specific font names (not defaults — no Inter/Roboto/Arial/system) + hex colors
 - Color system: CSS variables for background, surface, primary text, muted text, accent
@@ -621,30 +636,33 @@ For each finding: what's wrong, severity (critical/high/medium), and the file:li
 
 Be opinionated. Be specific. Do not hedge. This is YOUR design direction — own it.`;
 
-    subagentPrompt = `Given this product context, propose a design direction that would SURPRISE. What would the cool indie studio do that the enterprise UI team wouldn't?
+		subagentPrompt = `Given this product context, propose a design direction that would SURPRISE. What would the cool indie studio do that the enterprise UI team wouldn't?
 - Propose an aesthetic direction, typography stack (specific font names), color palette (hex values)
 - 2 deliberate departures from category norms
 - What emotional reaction should the user have in the first 3 seconds?
 
 Be bold. Be specific. No hedging.`;
-  } else {
-    // Unknown skill — return empty
-    return '';
-  }
+	} else {
+		// Unknown skill — return empty
+		return "";
+	}
 
-  // Build the opt-in section
-  const optInSection = isAutomatic ? `
-**Automatic:** Outside voices run automatically when Codex is available. No opt-in needed.` : `
+	// Build the opt-in section
+	const optInSection = isAutomatic
+		? `
+**Automatic:** Outside voices run automatically when Codex is available. No opt-in needed.`
+		: `
 Use AskUserQuestion:
-> "Want outside design voices${isPlanDesignReview ? ' before the detailed review' : ''}? Codex evaluates against OpenAI's design hard rules + litmus checks; Claude subagent does an independent ${isDesignConsultation ? 'design direction proposal' : 'completeness review'}."
+> "Want outside design voices${isPlanDesignReview ? " before the detailed review" : ""}? Codex evaluates against OpenAI's design hard rules + litmus checks; Claude subagent does an independent ${isDesignConsultation ? "design direction proposal" : "completeness review"}."
 >
 > A) Yes — run outside design voices
 > B) No — proceed without
 
 If user chooses B, skip this step and continue.`;
 
-  // Build the synthesis section
-  const synthesisSection = isPlanDesignReview ? `
+	// Build the synthesis section
+	const synthesisSection = isPlanDesignReview
+		? `
 **Synthesis — Litmus scorecard:**
 
 \`\`\`
@@ -670,20 +688,24 @@ Fill in each cell from the Codex and subagent outputs. CONFIRMED = both agree. D
 - Hard rejections → raised as the FIRST items in Pass 1, tagged \`[HARD REJECTION]\`
 - Litmus DISAGREE items → raised in the relevant pass with both perspectives
 - Litmus CONFIRMED failures → pre-loaded as known issues in the relevant pass
-- Passes can skip discovery and go straight to fixing for pre-identified issues` :
-    isDesignConsultation ? `
+- Passes can skip discovery and go straight to fixing for pre-identified issues`
+		: isDesignConsultation
+			? `
 **Synthesis:** Claude main references both Codex and subagent proposals in the Phase 3 proposal. Present:
 - Areas of agreement between all three voices (Claude main + Codex + subagent)
 - Genuine divergences as creative alternatives for the user to choose from
-- "Codex and I agree on X. Codex suggested Y where I'm proposing Z — here's why..."` : `
+- "Codex and I agree on X. Codex suggested Y where I'm proposing Z — here's why..."`
+			: `
 **Synthesis — Litmus scorecard:**
 
 Use the same scorecard format as /plan-design-review (shown above). Fill in from both outputs.
 Merge findings into the triage with \`[codex]\` / \`[subagent]\` / \`[cross-model]\` tags.`;
 
-  const escapedCodexPrompt = codexPrompt.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+	const escapedCodexPrompt = codexPrompt
+		.replace(/`/g, "\\`")
+		.replace(/\$/g, "\\$");
 
-  return `## Design Outside Voices (parallel)
+	return `## Design Outside Voices (parallel)
 ${optInSection}
 
 **Check Codex availability:**
@@ -715,8 +737,8 @@ Dispatch a subagent with this prompt:
 - On any Codex error: proceed with Claude subagent output only, tagged \`[single-model]\`.
 - If Claude subagent also fails: "Outside voices unavailable — continuing with primary review."
 
-Present Codex output under a \`CODEX SAYS (design ${isPlanDesignReview ? 'critique' : isDesignReview ? 'source audit' : 'direction'}):\` header.
-Present subagent output under a \`CLAUDE SUBAGENT (design ${isPlanDesignReview ? 'completeness' : isDesignReview ? 'consistency' : 'direction'}):\` header.
+Present Codex output under a \`CODEX SAYS (design ${isPlanDesignReview ? "critique" : isDesignReview ? "source audit" : "direction"}):\` header.
+Present subagent output under a \`CLAUDE SUBAGENT (design ${isPlanDesignReview ? "completeness" : isDesignReview ? "consistency" : "direction"}):\` header.
 ${synthesisSection}
 
 **Log the result:**
@@ -728,11 +750,17 @@ Replace STATUS with "clean" or "issues_found", SOURCE with "codex+subagent", "co
 
 // ─── Design Hard Rules (OpenAI framework + gstack slop blacklist) ───
 export function generateDesignHardRules(_ctx: TemplateContext): string {
-  const slopItems = AI_SLOP_BLACKLIST.map((item, i) => `${i + 1}. ${item}`).join('\n');
-  const rejectionItems = OPENAI_HARD_REJECTIONS.map((item, i) => `${i + 1}. ${item}`).join('\n');
-  const litmusItems = OPENAI_LITMUS_CHECKS.map((item, i) => `${i + 1}. ${item}`).join('\n');
+	const slopItems = AI_SLOP_BLACKLIST.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join("\n");
+	const rejectionItems = OPENAI_HARD_REJECTIONS.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join("\n");
+	const litmusItems = OPENAI_LITMUS_CHECKS.map(
+		(item, i) => `${i + 1}. ${item}`,
+	).join("\n");
 
-  return `### Design Hard Rules
+	return `### Design Hard Rules
 
 **Classifier — determine rule set before evaluating:**
 - **MARKETING/LANDING PAGE** (hero-driven, brand-forward, conversion-focused) → apply Landing Page Rules
@@ -786,13 +814,13 @@ Source: [OpenAI "Designing Delightful Frontends with GPT-5.4"](https://developer
 }
 
 export function generateDesignSetup(ctx: TemplateContext): string {
-  return `## DESIGN SETUP (run this check BEFORE any design mockup command)
+	return `## DESIGN SETUP (run this check BEFORE any design mockup command)
 
 \`\`\`bash
 _ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 D=""
 [ -n "$_ROOT" ] && [ -x "$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design" ] && D="$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design"
-[ -z "$D" ] && D="$HOME${ctx.paths.designDir.replace(/^~/, '')}/design"
+[ -z "$D" ] && D="$HOME${ctx.paths.designDir.replace(/^~/, "")}/design"
 if [ -x "$D" ]; then
   echo "DESIGN_READY: $D"
 else
@@ -800,7 +828,7 @@ else
 fi
 B=""
 [ -n "$_ROOT" ] && [ -x "$_ROOT/${ctx.paths.localSkillRoot}/browse/dist/browse" ] && B="$_ROOT/${ctx.paths.localSkillRoot}/browse/dist/browse"
-[ -z "$B" ] && B="$HOME${ctx.paths.browseDir.replace(/^~/, '')}/browse"
+[ -z "$B" ] && B="$HOME${ctx.paths.browseDir.replace(/^~/, "")}/browse"
 if [ -x "$B" ]; then
   echo "BROWSE_READY: $B"
 else
@@ -831,13 +859,13 @@ data, not project files. They persist across branches, conversations, and worksp
 }
 
 export function generateDesignMockup(ctx: TemplateContext): string {
-  return `## Visual Design Exploration
+	return `## Visual Design Exploration
 
 \`\`\`bash
 _ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 D=""
 [ -n "$_ROOT" ] && [ -x "$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design" ] && D="$_ROOT/${ctx.paths.localSkillRoot}/design/dist/design"
-[ -z "$D" ] && D="$HOME${ctx.paths.designDir.replace(/^~/, '')}/design"
+[ -z "$D" ] && D="$HOME${ctx.paths.designDir.replace(/^~/, "")}/design"
 [ -x "$D" ] && echo "DESIGN_READY" || echo "DESIGN_NOT_AVAILABLE"
 \`\`\`
 
@@ -907,7 +935,7 @@ Reference the saved mockup in the design doc or plan.`;
 }
 
 export function generateDesignShotgunLoop(_ctx: TemplateContext): string {
-  return `### Comparison Board + Feedback Loop
+	return `### Comparison Board + Feedback Loop
 
 Create the comparison board and serve it over HTTP:
 
@@ -1011,7 +1039,7 @@ echo '{"approved_variant":"<V>","feedback":"<FB>","date":"'$(date -u +%Y-%m-%dT%
 }
 
 export function generateTasteProfile(ctx: TemplateContext): string {
-  return `Read the persistent taste profile if it exists:
+	return `Read the persistent taste profile if it exists:
 
 \`\`\`bash
 _TASTE_PROFILE=~/.gstack/projects/$SLUG/taste-profile.json
@@ -1030,7 +1058,7 @@ fi
 **If TASTE_PROFILE_FOUND:** Summarize the strongest signals (top 3 approved entries
 per dimension by confidence * approved_count). Include them in the design brief:
 
-"Based on ${'\\${SESSION_COUNT}'} prior sessions, this user's taste leans toward:
+"Based on ${"\\${SESSION_COUNT}"} prior sessions, this user's taste leans toward:
 fonts [top-3], colors [top-3], layouts [top-3], aesthetics [top-3]. Bias
 generation toward these unless the user explicitly requests a different direction.
 Also avoid their strong rejections: [top-3 rejected per dimension]."
@@ -1054,7 +1082,7 @@ will migrate it to schema v1 on the next write.`;
 
 // ─── UX Behavioral Foundations (Krug + HCI research) ───
 export function generateUXPrinciples(_ctx: TemplateContext): string {
-  return `## UX Principles: How Users Actually Behave
+	return `## UX Principles: How Users Actually Behave
 
 These principles govern how real humans interact with interfaces. They are observed
 behavior, not preferences. Apply them before, during, and after every design decision.
@@ -1139,4 +1167,3 @@ Flat design can strip away useful visual information that signals interactivity.
 Prioritize ruthlessly: things needed in a hurry go close at hand, everything
 else a few taps away with an obvious path to get there.`;
 }
-

@@ -1,7 +1,7 @@
-import type { TemplateContext } from '../types';
+import type { TemplateContext } from "../types";
 
 export function generateWritingStyleMigration(ctx: TemplateContext): string {
-  return `If \`WRITING_STYLE_PENDING\` is \`yes\`: ask once about writing style:
+	return `If \`WRITING_STYLE_PENDING\` is \`yes\`: ask once about writing style:
 
 > v1 prompts are simpler: first-use jargon glosses, outcome-framed questions, shorter prose. Keep default or restore terse?
 

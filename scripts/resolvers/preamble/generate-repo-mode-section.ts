@@ -1,7 +1,5 @@
-
-
 export function generateRepoModeSection(): string {
-  return `## Repo Ownership — See Something, Say Something
+	return `## Repo Ownership — See Something, Say Something
 
 \`REPO_MODE\` controls how to handle issues outside your branch:
 - **\`solo\`** — You own everything. Investigate and offer to fix proactively.
@@ -9,4 +7,3 @@ export function generateRepoModeSection(): string {
 
 Always flag anything that looks wrong — one sentence, what you noticed and its impact.`;
 }
-

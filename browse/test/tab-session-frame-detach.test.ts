@@ -41,114 +41,114 @@
  * this restores the documented intent.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { TabSession, type RefEntry } from '../src/tab-session';
-import type { Page, Frame, Locator } from 'playwright';
+import { beforeEach, describe, expect, test } from "bun:test";
+import type { Frame, Locator, Page } from "playwright";
+import { type RefEntry, TabSession } from "../src/tab-session";
 
 // Minimal type-cast mocks. Same pattern as tab-isolation.test.ts —
 // pure-logic tests don't launch a browser.
 function mockPage(): Page {
-  return {} as Page;
+	return {} as Page;
 }
 
 function mockDetachedFrame(): Frame {
-  return { isDetached: () => true } as unknown as Frame;
+	return { isDetached: () => true } as unknown as Frame;
 }
 
 function mockAttachedFrame(): Frame {
-  return { isDetached: () => false } as unknown as Frame;
+	return { isDetached: () => false } as unknown as Frame;
 }
 
 function mockRefEntry(role: string, name: string): RefEntry {
-  return {
-    locator: {} as Locator,
-    role,
-    name,
-  };
+	return {
+		locator: {} as Locator,
+		role,
+		name,
+	};
 }
 
 // Fresh refs Map per call — avoid by-reference mutation poisoning across
 // halves of the symmetry test (clearRefs() clears the same Map instance
 // the test holds a reference to).
 function makeRefs(): Map<string, RefEntry> {
-  const r = new Map<string, RefEntry>();
-  r.set('e1', mockRefEntry('button', 'Submit'));
-  r.set('e2', mockRefEntry('textbox', 'Email'));
-  r.set('e3', mockRefEntry('link', 'Forgot password'));
-  return r;
+	const r = new Map<string, RefEntry>();
+	r.set("e1", mockRefEntry("button", "Submit"));
+	r.set("e2", mockRefEntry("textbox", "Email"));
+	r.set("e3", mockRefEntry("link", "Forgot password"));
+	return r;
 }
 
-describe('TabSession — frame detach + ref staleness', () => {
-  let session: TabSession;
+describe("TabSession — frame detach + ref staleness", () => {
+	let session: TabSession;
 
-  beforeEach(() => {
-    session = new TabSession(mockPage());
-    session.setRefMap(makeRefs());
-  });
+	beforeEach(() => {
+		session = new TabSession(mockPage());
+		session.setRefMap(makeRefs());
+	});
 
-  test('refs cleared when getActiveFrameOrPage detects detached iframe', () => {
-    // Pre-condition: refs captured inside an iframe context
-    session.setFrame(mockDetachedFrame());
-    expect(session.getRefCount()).toBe(3);
+	test("refs cleared when getActiveFrameOrPage detects detached iframe", () => {
+		// Pre-condition: refs captured inside an iframe context
+		session.setFrame(mockDetachedFrame());
+		expect(session.getRefCount()).toBe(3);
 
-    // Act: caller invokes getActiveFrameOrPage (e.g. via the next /command
-    // dispatch). The detach gets noticed inside.
-    const result = session.getActiveFrameOrPage();
+		// Act: caller invokes getActiveFrameOrPage (e.g. via the next /command
+		// dispatch). The detach gets noticed inside.
+		const result = session.getActiveFrameOrPage();
 
-    // Auto-recovery: activeFrame nulled (already worked pre-fix)
-    expect(session.getFrame()).toBeNull();
+		// Auto-recovery: activeFrame nulled (already worked pre-fix)
+		expect(session.getFrame()).toBeNull();
 
-    // The fix: refs ALSO cleared so the next snapshot runs against a
-    // clean ref namespace. Pre-fix this was 3 — refs lingered against a
-    // dead frame, colliding with refs the next snapshot would emit.
-    expect(session.getRefCount()).toBe(0);
-  });
+		// The fix: refs ALSO cleared so the next snapshot runs against a
+		// clean ref namespace. Pre-fix this was 3 — refs lingered against a
+		// dead frame, colliding with refs the next snapshot would emit.
+		expect(session.getRefCount()).toBe(0);
+	});
 
-  test('refs preserved when active frame is still attached', () => {
-    // No regression on the happy path — attached frame should NOT
-    // trigger the cleanup.
-    session.setFrame(mockAttachedFrame());
-    expect(session.getRefCount()).toBe(3);
+	test("refs preserved when active frame is still attached", () => {
+		// No regression on the happy path — attached frame should NOT
+		// trigger the cleanup.
+		session.setFrame(mockAttachedFrame());
+		expect(session.getRefCount()).toBe(3);
 
-    session.getActiveFrameOrPage();
+		session.getActiveFrameOrPage();
 
-    // Frame still set, refs still present.
-    expect(session.getFrame()).not.toBeNull();
-    expect(session.getRefCount()).toBe(3);
-  });
+		// Frame still set, refs still present.
+		expect(session.getFrame()).not.toBeNull();
+		expect(session.getRefCount()).toBe(3);
+	});
 
-  test('refs preserved when no frame is set (page-level snapshot)', () => {
-    // No frame ever set → the if-branch never enters → refs untouched.
-    expect(session.getFrame()).toBeNull();
-    expect(session.getRefCount()).toBe(3);
+	test("refs preserved when no frame is set (page-level snapshot)", () => {
+		// No frame ever set → the if-branch never enters → refs untouched.
+		expect(session.getFrame()).toBeNull();
+		expect(session.getRefCount()).toBe(3);
 
-    session.getActiveFrameOrPage();
+		session.getActiveFrameOrPage();
 
-    expect(session.getRefCount()).toBe(3);
-  });
+		expect(session.getRefCount()).toBe(3);
+	});
 
-  test('matches onMainFrameNavigated symmetry (refs+frame both cleared)', () => {
-    // Pin the design symmetry: both staleness paths (main-frame nav AND
-    // iframe detach) must clear both pieces of state together. If a
-    // future refactor splits these, the test fails before merge.
-    session.setFrame(mockDetachedFrame());
-    expect(session.getRefCount()).toBe(3);
+	test("matches onMainFrameNavigated symmetry (refs+frame both cleared)", () => {
+		// Pin the design symmetry: both staleness paths (main-frame nav AND
+		// iframe detach) must clear both pieces of state together. If a
+		// future refactor splits these, the test fails before merge.
+		session.setFrame(mockDetachedFrame());
+		expect(session.getRefCount()).toBe(3);
 
-    session.onMainFrameNavigated();
+		session.onMainFrameNavigated();
 
-    expect(session.getFrame()).toBeNull();
-    expect(session.getRefCount()).toBe(0);
+		expect(session.getFrame()).toBeNull();
+		expect(session.getRefCount()).toBe(0);
 
-    // Reset with a FRESH Map (the previous one was emptied by clearRefs
-    // by-reference) and exercise the iframe-detach path. End state must
-    // match.
-    session.setRefMap(makeRefs());
-    session.setFrame(mockDetachedFrame());
-    expect(session.getRefCount()).toBe(3);
+		// Reset with a FRESH Map (the previous one was emptied by clearRefs
+		// by-reference) and exercise the iframe-detach path. End state must
+		// match.
+		session.setRefMap(makeRefs());
+		session.setFrame(mockDetachedFrame());
+		expect(session.getRefCount()).toBe(3);
 
-    session.getActiveFrameOrPage();
+		session.getActiveFrameOrPage();
 
-    expect(session.getFrame()).toBeNull();
-    expect(session.getRefCount()).toBe(0);
-  });
+		expect(session.getFrame()).toBeNull();
+		expect(session.getRefCount()).toBe(0);
+	});
 });

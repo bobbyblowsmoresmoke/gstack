@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * gstack-gbrain-sync — V1 unified sync verb.
  *
@@ -29,45 +30,59 @@
  * than building a gstack-side daemon.
  */
 
-import { existsSync, statSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, renameSync } from "fs";
-import { join, dirname } from "path";
 import { execSync, spawnSync } from "child_process";
-import { homedir } from "os";
 import { createHash } from "crypto";
-
-import { detectEngineTier, withErrorContext, canonicalizeRemote } from "../lib/gstack-memory-helpers";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	statSync,
+	unlinkSync,
+	writeFileSync,
+} from "fs";
+import { homedir } from "os";
+import { dirname, join } from "path";
+import {
+	type LocalEngineStatus,
+	localEngineStatus,
+} from "../lib/gbrain-local-status";
 import { ensureSourceRegistered, sourcePageCount } from "../lib/gbrain-sources";
-import { localEngineStatus, type LocalEngineStatus } from "../lib/gbrain-local-status";
+import {
+	canonicalizeRemote,
+	detectEngineTier,
+	withErrorContext,
+} from "../lib/gstack-memory-helpers";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Mode = "incremental" | "full" | "dry-run";
 
 interface CliArgs {
-  mode: Mode;
-  quiet: boolean;
-  noCode: boolean;
-  noMemory: boolean;
-  noBrainSync: boolean;
-  codeOnly: boolean;
+	mode: Mode;
+	quiet: boolean;
+	noCode: boolean;
+	noMemory: boolean;
+	noBrainSync: boolean;
+	codeOnly: boolean;
 }
 
 interface CodeStageDetail {
-  source_id?: string;
-  source_path?: string;
-  page_count?: number | null;
-  last_imported?: string;
-  status?: "ok" | "skipped" | "failed";
+	source_id?: string;
+	source_path?: string;
+	page_count?: number | null;
+	last_imported?: string;
+	status?: "ok" | "skipped" | "failed";
 }
 
 interface StageResult {
-  name: string;
-  ran: boolean;
-  ok: boolean;
-  duration_ms: number;
-  summary: string;
-  /** Stage-specific structured detail. Code stage carries source_id + page_count. */
-  detail?: CodeStageDetail;
+	name: string;
+	ran: boolean;
+	ok: boolean;
+	duration_ms: number;
+	summary: string;
+	/** Stage-specific structured detail. Code stage carries source_id + page_count. */
+	detail?: CodeStageDetail;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -81,7 +96,7 @@ const STALE_LOCK_MS = 5 * 60 * 1000;
 // ── CLI ────────────────────────────────────────────────────────────────────
 
 function printUsage(): void {
-  console.error(`Usage: gstack-gbrain-sync [--incremental|--full|--dry-run] [options]
+	console.error(`Usage: gstack-gbrain-sync [--incremental|--full|--dry-run] [options]
 
 Modes:
   --incremental        Default. mtime fast-path; ~50ms steady-state.
@@ -102,61 +117,81 @@ Each stage failure is non-fatal; subsequent stages still run.
 }
 
 function parseArgs(): CliArgs {
-  const args = process.argv.slice(2);
-  let mode: Mode = "incremental";
-  let quiet = false;
-  let noCode = false;
-  let noMemory = false;
-  let noBrainSync = false;
-  let codeOnly = false;
+	const args = process.argv.slice(2);
+	let mode: Mode = "incremental";
+	let quiet = false;
+	let noCode = false;
+	let noMemory = false;
+	let noBrainSync = false;
+	let codeOnly = false;
 
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    switch (a) {
-      case "--incremental": mode = "incremental"; break;
-      case "--full": mode = "full"; break;
-      case "--dry-run": mode = "dry-run"; break;
-      case "--quiet": quiet = true; break;
-      case "--no-code": noCode = true; break;
-      case "--no-memory": noMemory = true; break;
-      case "--no-brain-sync": noBrainSync = true; break;
-      case "--code-only":
-        codeOnly = true;
-        noMemory = true;
-        noBrainSync = true;
-        break;
-      case "--help":
-      case "-h":
-        printUsage();
-        process.exit(0);
-      default:
-        console.error(`Unknown argument: ${a}`);
-        printUsage();
-        process.exit(1);
-    }
-  }
+	for (let i = 0; i < args.length; i++) {
+		const a = args[i];
+		switch (a) {
+			case "--incremental":
+				mode = "incremental";
+				break;
+			case "--full":
+				mode = "full";
+				break;
+			case "--dry-run":
+				mode = "dry-run";
+				break;
+			case "--quiet":
+				quiet = true;
+				break;
+			case "--no-code":
+				noCode = true;
+				break;
+			case "--no-memory":
+				noMemory = true;
+				break;
+			case "--no-brain-sync":
+				noBrainSync = true;
+				break;
+			case "--code-only":
+				codeOnly = true;
+				noMemory = true;
+				noBrainSync = true;
+				break;
+			case "--help":
+			case "-h":
+				printUsage();
+				process.exit(0);
+			default:
+				console.error(`Unknown argument: ${a}`);
+				printUsage();
+				process.exit(1);
+		}
+	}
 
-  return { mode, quiet, noCode, noMemory, noBrainSync, codeOnly };
+	return { mode, quiet, noCode, noMemory, noBrainSync, codeOnly };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function repoRoot(): string | null {
-  try {
-    const out = execSync("git rev-parse --show-toplevel", { encoding: "utf-8", timeout: 2000 });
-    return out.trim();
-  } catch {
-    return null;
-  }
+	try {
+		const out = execSync("git rev-parse --show-toplevel", {
+			encoding: "utf-8",
+			timeout: 2000,
+		});
+		return out.trim();
+	} catch {
+		return null;
+	}
 }
 
 function originUrl(): string | null {
-  try {
-    const out = execSync("git remote get-url origin", { encoding: "utf-8", timeout: 2000 });
-    return out.trim();
-  } catch {
-    return null;
-  }
+	try {
+		const out = execSync("git remote get-url origin", {
+			encoding: "utf-8",
+			timeout: 2000,
+		});
+		return out.trim();
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -175,15 +210,18 @@ function originUrl(): string | null {
  * with a hashed-tail fallback when the combined slug exceeds budget.
  */
 function deriveCodeSourceId(repoPath: string): string {
-  const pathHash = createHash("sha1").update(repoPath).digest("hex").slice(0, 8);
-  const remote = canonicalizeRemote(originUrl());
-  if (remote) {
-    const segs = remote.split("/").filter(Boolean);
-    const slugSource = segs.slice(-2).join("-");
-    return constrainSourceId("gstack-code", `${slugSource}-${pathHash}`);
-  }
-  const base = repoPath.split("/").pop() || "repo";
-  return constrainSourceId("gstack-code", `${base}-${pathHash}`);
+	const pathHash = createHash("sha1")
+		.update(repoPath)
+		.digest("hex")
+		.slice(0, 8);
+	const remote = canonicalizeRemote(originUrl());
+	if (remote) {
+		const segs = remote.split("/").filter(Boolean);
+		const slugSource = segs.slice(-2).join("-");
+		return constrainSourceId("gstack-code", `${slugSource}-${pathHash}`);
+	}
+	const base = repoPath.split("/").pop() || "repo";
+	return constrainSourceId("gstack-code", `${base}-${pathHash}`);
 }
 
 /**
@@ -197,14 +235,14 @@ function deriveCodeSourceId(repoPath: string): string {
  * sync from any worktree of this repo, so users don't accumulate orphans.
  */
 function deriveLegacyCodeSourceId(repoPath: string): string {
-  const remote = canonicalizeRemote(originUrl());
-  if (remote) {
-    const segs = remote.split("/").filter(Boolean);
-    const slugSource = segs.slice(-2).join("-");
-    return constrainSourceId("gstack-code", slugSource);
-  }
-  const base = repoPath.split("/").pop() || "repo";
-  return constrainSourceId("gstack-code", base);
+	const remote = canonicalizeRemote(originUrl());
+	if (remote) {
+		const segs = remote.split("/").filter(Boolean);
+		const slugSource = segs.slice(-2).join("-");
+		return constrainSourceId("gstack-code", slugSource);
+	}
+	const base = repoPath.split("/").pop() || "repo";
+	return constrainSourceId("gstack-code", base);
 }
 
 /**
@@ -213,80 +251,92 @@ function deriveLegacyCodeSourceId(repoPath: string): string {
  * would exceed 32 chars.
  */
 function constrainSourceId(prefix: string, raw: string): string {
-  const MAX = 32;
-  const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  // Empty slug after sanitize (e.g. raw was all non-alnum like "___") would
-  // produce "${prefix}-" which fails gbrain's validator on the trailing
-  // hyphen. Fall back to a deterministic hash of the original input so the
-  // result is stable across runs of the same repo.
-  if (!slug) {
-    const hash = createHash("sha1").update(raw || "_empty").digest("hex").slice(0, 6);
-    return `${prefix}-${hash}`;
-  }
-  const full = `${prefix}-${slug}`;
-  if (full.length <= MAX) return full;
-  const hash = createHash("sha1").update(slug).digest("hex").slice(0, 6);
-  // Total budget: prefix + "-" + tail + "-" + hash
-  const tailBudget = MAX - prefix.length - 2 - hash.length;
-  if (tailBudget < 1) return `${prefix}-${hash}`;
-  const tail = slug.slice(-tailBudget).replace(/^-+|-+$/g, "");
-  return tail ? `${prefix}-${tail}-${hash}` : `${prefix}-${hash}`;
+	const MAX = 32;
+	const slug = raw
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	// Empty slug after sanitize (e.g. raw was all non-alnum like "___") would
+	// produce "${prefix}-" which fails gbrain's validator on the trailing
+	// hyphen. Fall back to a deterministic hash of the original input so the
+	// result is stable across runs of the same repo.
+	if (!slug) {
+		const hash = createHash("sha1")
+			.update(raw || "_empty")
+			.digest("hex")
+			.slice(0, 6);
+		return `${prefix}-${hash}`;
+	}
+	const full = `${prefix}-${slug}`;
+	if (full.length <= MAX) return full;
+	const hash = createHash("sha1").update(slug).digest("hex").slice(0, 6);
+	// Total budget: prefix + "-" + tail + "-" + hash
+	const tailBudget = MAX - prefix.length - 2 - hash.length;
+	if (tailBudget < 1) return `${prefix}-${hash}`;
+	const tail = slug.slice(-tailBudget).replace(/^-+|-+$/g, "");
+	return tail ? `${prefix}-${tail}-${hash}` : `${prefix}-${hash}`;
 }
 
 function gbrainAvailable(): boolean {
-  try {
-    execSync("command -v gbrain", { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
+	try {
+		execSync("command -v gbrain", { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 // ── Lock file (D1) ─────────────────────────────────────────────────────────
 
 interface LockInfo {
-  pid: number;
-  started_at: string;
+	pid: number;
+	started_at: string;
 }
 
 function acquireLock(): boolean {
-  mkdirSync(GSTACK_HOME, { recursive: true });
-  if (existsSync(LOCK_PATH)) {
-    // Check if stale.
-    try {
-      const stat = statSync(LOCK_PATH);
-      const ageMs = Date.now() - stat.mtimeMs;
-      if (ageMs > STALE_LOCK_MS) {
-        // Stale; take over.
-        unlinkSync(LOCK_PATH);
-      } else {
-        return false;
-      }
-    } catch {
-      // Cannot stat; bail conservatively.
-      return false;
-    }
-  }
-  const info: LockInfo = { pid: process.pid, started_at: new Date().toISOString() };
-  try {
-    writeFileSync(LOCK_PATH, JSON.stringify(info), { encoding: "utf-8", flag: "wx" });
-    return true;
-  } catch {
-    return false;
-  }
+	mkdirSync(GSTACK_HOME, { recursive: true });
+	if (existsSync(LOCK_PATH)) {
+		// Check if stale.
+		try {
+			const stat = statSync(LOCK_PATH);
+			const ageMs = Date.now() - stat.mtimeMs;
+			if (ageMs > STALE_LOCK_MS) {
+				// Stale; take over.
+				unlinkSync(LOCK_PATH);
+			} else {
+				return false;
+			}
+		} catch {
+			// Cannot stat; bail conservatively.
+			return false;
+		}
+	}
+	const info: LockInfo = {
+		pid: process.pid,
+		started_at: new Date().toISOString(),
+	};
+	try {
+		writeFileSync(LOCK_PATH, JSON.stringify(info), {
+			encoding: "utf-8",
+			flag: "wx",
+		});
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function releaseLock(): void {
-  try {
-    if (!existsSync(LOCK_PATH)) return;
-    const raw = readFileSync(LOCK_PATH, "utf-8");
-    const info = JSON.parse(raw) as LockInfo;
-    if (info.pid === process.pid) {
-      unlinkSync(LOCK_PATH);
-    }
-  } catch {
-    // Best-effort cleanup.
-  }
+	try {
+		if (!existsSync(LOCK_PATH)) return;
+		const raw = readFileSync(LOCK_PATH, "utf-8");
+		const info = JSON.parse(raw) as LockInfo;
+		if (info.pid === process.pid) {
+			unlinkSync(LOCK_PATH);
+		}
+	} catch {
+		// Best-effort cleanup.
+	}
 }
 
 // ── Stage runners ──────────────────────────────────────────────────────────
@@ -303,283 +353,329 @@ function releaseLock(): void {
  *   broken-db      → "config points at unreachable DB; see /setup-gbrain Step 1.5"
  */
 function skipStageForLocalStatus(
-  stage: "code" | "memory",
-  status: LocalEngineStatus,
-  t0: number,
+	stage: "code" | "memory",
+	status: LocalEngineStatus,
+	t0: number,
 ): StageResult {
-  const reasons: Record<Exclude<LocalEngineStatus, "ok">, string> = {
-    "no-cli": "gbrain CLI not on PATH; install via /setup-gbrain",
-    "missing-config":
-      "no local engine; run /setup-gbrain to add local PGLite for code search",
-    "broken-config":
-      "config at ~/.gbrain/config.json is malformed; see /setup-gbrain Step 1.5",
-    "broken-db":
-      "config points at unreachable DB; see /setup-gbrain Step 1.5",
-  };
-  const reason = reasons[status as Exclude<LocalEngineStatus, "ok">];
-  return {
-    name: stage,
-    ran: false,
-    ok: true, // SKIP (per D12) — not a stage failure, just an unsatisfied prerequisite
-    duration_ms: Date.now() - t0,
-    summary: `skipped — local engine ${status} — ${reason}`,
-  };
+	const reasons: Record<Exclude<LocalEngineStatus, "ok">, string> = {
+		"no-cli": "gbrain CLI not on PATH; install via /setup-gbrain",
+		"missing-config":
+			"no local engine; run /setup-gbrain to add local PGLite for code search",
+		"broken-config":
+			"config at ~/.gbrain/config.json is malformed; see /setup-gbrain Step 1.5",
+		"broken-db": "config points at unreachable DB; see /setup-gbrain Step 1.5",
+	};
+	const reason = reasons[status as Exclude<LocalEngineStatus, "ok">];
+	return {
+		name: stage,
+		ran: false,
+		ok: true, // SKIP (per D12) — not a stage failure, just an unsatisfied prerequisite
+		duration_ms: Date.now() - t0,
+		summary: `skipped — local engine ${status} — ${reason}`,
+	};
 }
 
-
 async function runCodeImport(args: CliArgs): Promise<StageResult> {
-  const t0 = Date.now();
-  const root = repoRoot();
-  if (!root) {
-    return { name: "code", ran: false, ok: true, duration_ms: 0, summary: "skipped (not in git repo)" };
-  }
-  if (!gbrainAvailable()) {
-    return { name: "code", ran: false, ok: false, duration_ms: 0, summary: "skipped (gbrain CLI not in PATH)" };
-  }
+	const t0 = Date.now();
+	const root = repoRoot();
+	if (!root) {
+		return {
+			name: "code",
+			ran: false,
+			ok: true,
+			duration_ms: 0,
+			summary: "skipped (not in git repo)",
+		};
+	}
+	if (!gbrainAvailable()) {
+		return {
+			name: "code",
+			ran: false,
+			ok: false,
+			duration_ms: 0,
+			summary: "skipped (gbrain CLI not in PATH)",
+		};
+	}
 
-  const sourceId = deriveCodeSourceId(root);
+	const sourceId = deriveCodeSourceId(root);
 
-  // dry-run preview always shows the would-do steps, regardless of local
-  // engine state. Useful for "what would /sync-gbrain do" without probing
-  // the engine.
-  if (args.mode === "dry-run") {
-    return {
-      name: "code",
-      ran: false,
-      ok: true,
-      duration_ms: 0,
-      summary: `would: gbrain sources add ${sourceId} --path ${root} --federated; gbrain sync --strategy code --source ${sourceId}; gbrain sources attach ${sourceId}`,
-      detail: { source_id: sourceId, source_path: root, status: "skipped" },
-    };
-  }
+	// dry-run preview always shows the would-do steps, regardless of local
+	// engine state. Useful for "what would /sync-gbrain do" without probing
+	// the engine.
+	if (args.mode === "dry-run") {
+		return {
+			name: "code",
+			ran: false,
+			ok: true,
+			duration_ms: 0,
+			summary: `would: gbrain sources add ${sourceId} --path ${root} --federated; gbrain sync --strategy code --source ${sourceId}; gbrain sources attach ${sourceId}`,
+			detail: { source_id: sourceId, source_path: root, status: "skipped" },
+		};
+	}
 
-  // Split-engine pre-flight (per plan D12): when local engine is not ok, SKIP
-  // code stage cleanly. Brain-sync stage still runs because it doesn't depend
-  // on local engine. The /sync-gbrain Step 1.5 pre-flight surfaces the user
-  // remediation message; this skip just keeps the orchestrator from crashing
-  // when the local DB is dead. Skipped on --dry-run (above) since dry-run
-  // never actually probes anything.
-  const localStatus = localEngineStatus({ noCache: false });
-  if (localStatus !== "ok") {
-    return skipStageForLocalStatus("code", localStatus, t0);
-  }
+	// Split-engine pre-flight (per plan D12): when local engine is not ok, SKIP
+	// code stage cleanly. Brain-sync stage still runs because it doesn't depend
+	// on local engine. The /sync-gbrain Step 1.5 pre-flight surfaces the user
+	// remediation message; this skip just keeps the orchestrator from crashing
+	// when the local DB is dead. Skipped on --dry-run (above) since dry-run
+	// never actually probes anything.
+	const localStatus = localEngineStatus({ noCache: false });
+	if (localStatus !== "ok") {
+		return skipStageForLocalStatus("code", localStatus, t0);
+	}
 
-  // Step 0: Best-effort cleanup of pre-pathhash legacy source.
-  // Earlier /sync-gbrain versions registered `gstack-code-<slug>` (no path
-  // suffix). On a multi-worktree repo, those collapsed onto a single id
-  // with last-sync-wins. Federated search would return stale duplicate
-  // hits forever if we left the orphan in place. Remove the legacy id once
-  // here so users don't accumulate orphans.
-  // Failure is non-fatal — we still register the new id below.
-  const legacyId = deriveLegacyCodeSourceId(root);
-  let legacyRemoved = false;
-  if (legacyId !== sourceId) {
-    const rm = spawnSync("gbrain", ["sources", "remove", legacyId, "--confirm-destructive"], {
-      encoding: "utf-8",
-      timeout: 30_000,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    // Treat absent-source as success (clean state). gbrain emits "not found" on
-    // missing id; treat any non-zero exit without "not found" as a soft fail.
-    if (rm.status === 0) legacyRemoved = true;
-  }
+	// Step 0: Best-effort cleanup of pre-pathhash legacy source.
+	// Earlier /sync-gbrain versions registered `gstack-code-<slug>` (no path
+	// suffix). On a multi-worktree repo, those collapsed onto a single id
+	// with last-sync-wins. Federated search would return stale duplicate
+	// hits forever if we left the orphan in place. Remove the legacy id once
+	// here so users don't accumulate orphans.
+	// Failure is non-fatal — we still register the new id below.
+	const legacyId = deriveLegacyCodeSourceId(root);
+	let legacyRemoved = false;
+	if (legacyId !== sourceId) {
+		const rm = spawnSync(
+			"gbrain",
+			["sources", "remove", legacyId, "--confirm-destructive"],
+			{
+				encoding: "utf-8",
+				timeout: 30_000,
+				stdio: ["ignore", "pipe", "pipe"],
+			},
+		);
+		// Treat absent-source as success (clean state). gbrain emits "not found" on
+		// missing id; treat any non-zero exit without "not found" as a soft fail.
+		if (rm.status === 0) legacyRemoved = true;
+	}
 
-  // Step 1: Ensure source registered (idempotent). Single source of truth in lib —
-  // no synchronous duplicate here (per /codex review #12).
-  let registered = false;
-  try {
-    const result = await ensureSourceRegistered(sourceId, root, { federated: true });
-    registered = result.changed;
-  } catch (err) {
-    return {
-      name: "code",
-      ran: true,
-      ok: false,
-      duration_ms: Date.now() - t0,
-      summary: `source registration failed: ${(err as Error).message}`,
-      detail: { source_id: sourceId, source_path: root, status: "failed" },
-    };
-  }
+	// Step 1: Ensure source registered (idempotent). Single source of truth in lib —
+	// no synchronous duplicate here (per /codex review #12).
+	let registered = false;
+	try {
+		const result = await ensureSourceRegistered(sourceId, root, {
+			federated: true,
+		});
+		registered = result.changed;
+	} catch (err) {
+		return {
+			name: "code",
+			ran: true,
+			ok: false,
+			duration_ms: Date.now() - t0,
+			summary: `source registration failed: ${(err as Error).message}`,
+			detail: { source_id: sourceId, source_path: root, status: "failed" },
+		};
+	}
 
-  // Step 2: Run sync or reindex.
-  const syncArgs = args.mode === "full"
-    ? ["reindex-code", "--source", sourceId, "--yes"]
-    : ["sync", "--strategy", "code", "--source", sourceId];
+	// Step 2: Run sync or reindex.
+	const syncArgs =
+		args.mode === "full"
+			? ["reindex-code", "--source", sourceId, "--yes"]
+			: ["sync", "--strategy", "code", "--source", sourceId];
 
-  const syncResult = spawnSync("gbrain", syncArgs, {
-    stdio: args.quiet ? ["ignore", "ignore", "ignore"] : ["ignore", "inherit", "inherit"],
-    timeout: 35 * 60 * 1000,
-  });
+	const syncResult = spawnSync("gbrain", syncArgs, {
+		stdio: args.quiet
+			? ["ignore", "ignore", "ignore"]
+			: ["ignore", "inherit", "inherit"],
+		timeout: 35 * 60 * 1000,
+	});
 
-  if (syncResult.status !== 0) {
-    return {
-      name: "code",
-      ran: true,
-      ok: false,
-      duration_ms: Date.now() - t0,
-      summary: `gbrain ${syncArgs.join(" ")} exited ${syncResult.status}`,
-      detail: { source_id: sourceId, source_path: root, status: "failed" },
-    };
-  }
+	if (syncResult.status !== 0) {
+		return {
+			name: "code",
+			ran: true,
+			ok: false,
+			duration_ms: Date.now() - t0,
+			summary: `gbrain ${syncArgs.join(" ")} exited ${syncResult.status}`,
+			detail: { source_id: sourceId, source_path: root, status: "failed" },
+		};
+	}
 
-  // Step 3: Pin this worktree's CWD to the source via .gbrain-source. Subsequent
-  // gbrain code-def / code-refs / code-callers calls from anywhere under <root>
-  // route to this source by default — no --source flag needed.
-  //
-  // If attach fails the whole flow has a silent correctness problem: sync
-  // succeeded but unqualified `gbrain code-def` from this worktree will hit
-  // the wrong/default source. Treat it as a stage failure (ok=false) so the
-  // verdict block surfaces ERR and the user knows to retry rather than
-  // trusting stale results.
-  const attach = spawnSync("gbrain", ["sources", "attach", sourceId], {
-    encoding: "utf-8",
-    timeout: 10_000,
-    cwd: root,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const pageCount = sourcePageCount(sourceId);
-  const legacyNote = legacyRemoved ? `, removed legacy ${legacyId}` : "";
-  const baseSummary = `${registered ? "registered + " : ""}synced ${sourceId} (page_count=${pageCount ?? "unknown"}${legacyNote})`;
+	// Step 3: Pin this worktree's CWD to the source via .gbrain-source. Subsequent
+	// gbrain code-def / code-refs / code-callers calls from anywhere under <root>
+	// route to this source by default — no --source flag needed.
+	//
+	// If attach fails the whole flow has a silent correctness problem: sync
+	// succeeded but unqualified `gbrain code-def` from this worktree will hit
+	// the wrong/default source. Treat it as a stage failure (ok=false) so the
+	// verdict block surfaces ERR and the user knows to retry rather than
+	// trusting stale results.
+	const attach = spawnSync("gbrain", ["sources", "attach", sourceId], {
+		encoding: "utf-8",
+		timeout: 10_000,
+		cwd: root,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	const pageCount = sourcePageCount(sourceId);
+	const legacyNote = legacyRemoved ? `, removed legacy ${legacyId}` : "";
+	const baseSummary = `${registered ? "registered + " : ""}synced ${sourceId} (page_count=${pageCount ?? "unknown"}${legacyNote})`;
 
-  if (attach.status !== 0) {
-    const reason = (attach.stderr || attach.stdout || "").trim().split("\n").pop() || `exit ${attach.status}`;
-    return {
-      name: "code",
-      ran: true,
-      ok: false,
-      duration_ms: Date.now() - t0,
-      summary: `${baseSummary}; attach FAILED (${reason}) — code-def queries from this worktree will hit the default source until /sync-gbrain succeeds`,
-      detail: {
-        source_id: sourceId,
-        source_path: root,
-        page_count: pageCount,
-        last_imported: new Date().toISOString(),
-        status: "failed",
-      },
-    };
-  }
+	if (attach.status !== 0) {
+		const reason =
+			(attach.stderr || attach.stdout || "").trim().split("\n").pop() ||
+			`exit ${attach.status}`;
+		return {
+			name: "code",
+			ran: true,
+			ok: false,
+			duration_ms: Date.now() - t0,
+			summary: `${baseSummary}; attach FAILED (${reason}) — code-def queries from this worktree will hit the default source until /sync-gbrain succeeds`,
+			detail: {
+				source_id: sourceId,
+				source_path: root,
+				page_count: pageCount,
+				last_imported: new Date().toISOString(),
+				status: "failed",
+			},
+		};
+	}
 
-  return {
-    name: "code",
-    ran: true,
-    ok: true,
-    duration_ms: Date.now() - t0,
-    summary: baseSummary,
-    detail: {
-      source_id: sourceId,
-      source_path: root,
-      page_count: pageCount,
-      last_imported: new Date().toISOString(),
-      status: "ok",
-    },
-  };
+	return {
+		name: "code",
+		ran: true,
+		ok: true,
+		duration_ms: Date.now() - t0,
+		summary: baseSummary,
+		detail: {
+			source_id: sourceId,
+			source_path: root,
+			page_count: pageCount,
+			last_imported: new Date().toISOString(),
+			status: "ok",
+		},
+	};
 }
 
 function runMemoryIngest(args: CliArgs): StageResult {
-  const t0 = Date.now();
+	const t0 = Date.now();
 
-  if (args.mode === "dry-run") {
-    return { name: "memory", ran: false, ok: true, duration_ms: 0, summary: "would: gstack-memory-ingest --probe" };
-  }
+	if (args.mode === "dry-run") {
+		return {
+			name: "memory",
+			ran: false,
+			ok: true,
+			duration_ms: 0,
+			summary: "would: gstack-memory-ingest --probe",
+		};
+	}
 
-  // Split-engine pre-flight (per plan D12). gstack-memory-ingest shells out
-  // to `gbrain import` which targets the LOCAL engine. When that engine is
-  // not ok, SKIP cleanly so brain-sync (the only stage that doesn't depend
-  // on local engine) still runs.
-  const localStatus = localEngineStatus({ noCache: false });
-  if (localStatus !== "ok") {
-    return skipStageForLocalStatus("memory", localStatus, t0);
-  }
+	// Split-engine pre-flight (per plan D12). gstack-memory-ingest shells out
+	// to `gbrain import` which targets the LOCAL engine. When that engine is
+	// not ok, SKIP cleanly so brain-sync (the only stage that doesn't depend
+	// on local engine) still runs.
+	const localStatus = localEngineStatus({ noCache: false });
+	if (localStatus !== "ok") {
+		return skipStageForLocalStatus("memory", localStatus, t0);
+	}
 
-  const ingestPath = join(import.meta.dir, "gstack-memory-ingest.ts");
-  const ingestArgs = ["run", ingestPath];
-  if (args.mode === "full") ingestArgs.push("--bulk");
-  else ingestArgs.push("--incremental");
-  if (args.quiet) ingestArgs.push("--quiet");
+	const ingestPath = join(import.meta.dir, "gstack-memory-ingest.ts");
+	const ingestArgs = ["run", ingestPath];
+	if (args.mode === "full") ingestArgs.push("--bulk");
+	else ingestArgs.push("--incremental");
+	if (args.quiet) ingestArgs.push("--quiet");
 
-  const result = spawnSync("bun", ingestArgs, {
-    encoding: "utf-8",
-    timeout: 35 * 60 * 1000,
-  });
+	const result = spawnSync("bun", ingestArgs, {
+		encoding: "utf-8",
+		timeout: 35 * 60 * 1000,
+	});
 
-  // D6: parse [memory-ingest] lines from the child's stderr. ERR-prefixed
-  // lines indicate a system-level failure (gbrain crashed or CLI missing)
-  // and the child exits non-zero. Per-file failures are summarized in the
-  // last non-ERR [memory-ingest] line but do NOT make the verdict ERR.
-  const stderrLines = (result.stderr || "").split("\n");
-  const memLines = stderrLines.filter((l) => l.includes("[memory-ingest]"));
-  const errLine = memLines.find((l) => l.includes("[memory-ingest] ERR"));
-  const lastMemLine = memLines.slice(-1)[0];
-  const rawSummary = errLine || lastMemLine || "ingest pass complete";
-  // Strip the "[memory-ingest] " prefix and any leading "ERR: " for cleaner
-  // verdict output. The orchestrator's own formatStage will prefix with OK/ERR.
-  const summary = rawSummary
-    .replace(/^.*\[memory-ingest\]\s*/, "")
-    .replace(/^ERR:\s*/, "");
+	// D6: parse [memory-ingest] lines from the child's stderr. ERR-prefixed
+	// lines indicate a system-level failure (gbrain crashed or CLI missing)
+	// and the child exits non-zero. Per-file failures are summarized in the
+	// last non-ERR [memory-ingest] line but do NOT make the verdict ERR.
+	const stderrLines = (result.stderr || "").split("\n");
+	const memLines = stderrLines.filter((l) => l.includes("[memory-ingest]"));
+	const errLine = memLines.find((l) => l.includes("[memory-ingest] ERR"));
+	const lastMemLine = memLines.slice(-1)[0];
+	const rawSummary = errLine || lastMemLine || "ingest pass complete";
+	// Strip the "[memory-ingest] " prefix and any leading "ERR: " for cleaner
+	// verdict output. The orchestrator's own formatStage will prefix with OK/ERR.
+	const summary = rawSummary
+		.replace(/^.*\[memory-ingest\]\s*/, "")
+		.replace(/^ERR:\s*/, "");
 
-  const ok = result.status === 0;
-  return {
-    name: "memory",
-    ran: true,
-    ok,
-    duration_ms: Date.now() - t0,
-    summary: ok
-      ? summary
-      : `${summary}${result.status === null ? " (killed by signal / timeout)" : ` (exit ${result.status})`}`,
-  };
+	const ok = result.status === 0;
+	return {
+		name: "memory",
+		ran: true,
+		ok,
+		duration_ms: Date.now() - t0,
+		summary: ok
+			? summary
+			: `${summary}${result.status === null ? " (killed by signal / timeout)" : ` (exit ${result.status})`}`,
+	};
 }
 
 function runBrainSyncPush(args: CliArgs): StageResult {
-  const t0 = Date.now();
+	const t0 = Date.now();
 
-  if (args.mode === "dry-run") {
-    return { name: "brain-sync", ran: false, ok: true, duration_ms: 0, summary: "would: gstack-brain-sync --discover-new --once" };
-  }
+	if (args.mode === "dry-run") {
+		return {
+			name: "brain-sync",
+			ran: false,
+			ok: true,
+			duration_ms: 0,
+			summary: "would: gstack-brain-sync --discover-new --once",
+		};
+	}
 
-  const brainSyncPath = join(import.meta.dir, "gstack-brain-sync");
-  if (!existsSync(brainSyncPath)) {
-    return { name: "brain-sync", ran: false, ok: true, duration_ms: 0, summary: "skipped (gstack-brain-sync not installed)" };
-  }
+	const brainSyncPath = join(import.meta.dir, "gstack-brain-sync");
+	if (!existsSync(brainSyncPath)) {
+		return {
+			name: "brain-sync",
+			ran: false,
+			ok: true,
+			duration_ms: 0,
+			summary: "skipped (gstack-brain-sync not installed)",
+		};
+	}
 
-  spawnSync(brainSyncPath, ["--discover-new"], {
-    stdio: args.quiet ? ["ignore", "ignore", "ignore"] : ["ignore", "inherit", "inherit"],
-    timeout: 60 * 1000,
-  });
-  const result = spawnSync(brainSyncPath, ["--once"], {
-    stdio: args.quiet ? ["ignore", "ignore", "ignore"] : ["ignore", "inherit", "inherit"],
-    timeout: 60 * 1000,
-  });
+	spawnSync(brainSyncPath, ["--discover-new"], {
+		stdio: args.quiet
+			? ["ignore", "ignore", "ignore"]
+			: ["ignore", "inherit", "inherit"],
+		timeout: 60 * 1000,
+	});
+	const result = spawnSync(brainSyncPath, ["--once"], {
+		stdio: args.quiet
+			? ["ignore", "ignore", "ignore"]
+			: ["ignore", "inherit", "inherit"],
+		timeout: 60 * 1000,
+	});
 
-  return {
-    name: "brain-sync",
-    ran: true,
-    ok: result.status === 0,
-    duration_ms: Date.now() - t0,
-    summary: result.status === 0 ? "curated artifacts pushed" : `gstack-brain-sync exited ${result.status}`,
-  };
+	return {
+		name: "brain-sync",
+		ran: true,
+		ok: result.status === 0,
+		duration_ms: Date.now() - t0,
+		summary:
+			result.status === 0
+				? "curated artifacts pushed"
+				: `gstack-brain-sync exited ${result.status}`,
+	};
 }
 
 // ── State file ─────────────────────────────────────────────────────────────
 
 interface SyncState {
-  schema_version: 1;
-  last_writer: string;
-  last_sync?: string;
-  last_full_sync?: string;
-  last_stages?: StageResult[];
+	schema_version: 1;
+	last_writer: string;
+	last_sync?: string;
+	last_full_sync?: string;
+	last_stages?: StageResult[];
 }
 
 function loadSyncState(): SyncState {
-  if (!existsSync(STATE_PATH)) {
-    return { schema_version: 1, last_writer: "gstack-gbrain-sync" };
-  }
-  try {
-    const raw = JSON.parse(readFileSync(STATE_PATH, "utf-8")) as SyncState;
-    if (raw.schema_version === 1) return raw;
-  } catch {
-    // fall through
-  }
-  return { schema_version: 1, last_writer: "gstack-gbrain-sync" };
+	if (!existsSync(STATE_PATH)) {
+		return { schema_version: 1, last_writer: "gstack-gbrain-sync" };
+	}
+	try {
+		const raw = JSON.parse(readFileSync(STATE_PATH, "utf-8")) as SyncState;
+		if (raw.schema_version === 1) return raw;
+	} catch {
+		// fall through
+	}
+	return { schema_version: 1, last_writer: "gstack-gbrain-sync" };
 }
 
 /**
@@ -587,95 +683,124 @@ function loadSyncState(): SyncState {
  * rename(2) is atomic on POSIX filesystems.
  */
 function saveSyncState(state: SyncState): void {
-  try {
-    mkdirSync(dirname(STATE_PATH), { recursive: true });
-    const tmp = `${STATE_PATH}.tmp.${process.pid}`;
-    writeFileSync(tmp, JSON.stringify(state, null, 2), "utf-8");
-    renameSync(tmp, STATE_PATH);
-  } catch {
-    // non-fatal
-  }
+	try {
+		mkdirSync(dirname(STATE_PATH), { recursive: true });
+		const tmp = `${STATE_PATH}.tmp.${process.pid}`;
+		writeFileSync(tmp, JSON.stringify(state, null, 2), "utf-8");
+		renameSync(tmp, STATE_PATH);
+	} catch {
+		// non-fatal
+	}
 }
 
 // ── Output ─────────────────────────────────────────────────────────────────
 
 function formatStage(s: StageResult): string {
-  const status = !s.ran ? "SKIP" : s.ok ? "OK" : "ERR";
-  const dur = s.duration_ms > 0 ? ` (${(s.duration_ms / 1000).toFixed(1)}s)` : "";
-  return `  ${status.padEnd(5)} ${s.name.padEnd(12)} ${s.summary}${dur}`;
+	const status = !s.ran ? "SKIP" : s.ok ? "OK" : "ERR";
+	const dur =
+		s.duration_ms > 0 ? ` (${(s.duration_ms / 1000).toFixed(1)}s)` : "";
+	return `  ${status.padEnd(5)} ${s.name.padEnd(12)} ${s.summary}${dur}`;
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const args = parseArgs();
+	const args = parseArgs();
 
-  if (!args.quiet) {
-    const engine = detectEngineTier();
-    console.error(`[gbrain-sync] mode=${args.mode} engine=${engine.engine}`);
-  }
+	if (!args.quiet) {
+		const engine = detectEngineTier();
+		console.error(`[gbrain-sync] mode=${args.mode} engine=${engine.engine}`);
+	}
 
-  // Acquire lock (skip on dry-run since dry-run never writes).
-  const needsLock = args.mode !== "dry-run";
-  let haveLock = false;
-  if (needsLock) {
-    haveLock = acquireLock();
-    if (!haveLock) {
-      console.error(
-        `[gbrain-sync] another /sync-gbrain is running (lock at ${LOCK_PATH}). ` +
-        `If that process died, the lock auto-clears after 5 min, or remove it manually.`
-      );
-      process.exit(2);
-    }
-  }
+	// Acquire lock (skip on dry-run since dry-run never writes).
+	const needsLock = args.mode !== "dry-run";
+	let haveLock = false;
+	if (needsLock) {
+		haveLock = acquireLock();
+		if (!haveLock) {
+			console.error(
+				`[gbrain-sync] another /sync-gbrain is running (lock at ${LOCK_PATH}). ` +
+					`If that process died, the lock auto-clears after 5 min, or remove it manually.`,
+			);
+			process.exit(2);
+		}
+	}
 
-  const cleanup = () => {
-    if (haveLock) releaseLock();
-  };
-  process.on("SIGINT", () => { cleanup(); process.exit(130); });
-  process.on("SIGTERM", () => { cleanup(); process.exit(143); });
+	const cleanup = () => {
+		if (haveLock) releaseLock();
+	};
+	process.on("SIGINT", () => {
+		cleanup();
+		process.exit(130);
+	});
+	process.on("SIGTERM", () => {
+		cleanup();
+		process.exit(143);
+	});
 
-  let exitCode = 0;
-  try {
-    const state = loadSyncState();
-    const stages: StageResult[] = [];
+	let exitCode = 0;
+	try {
+		const state = loadSyncState();
+		const stages: StageResult[] = [];
 
-    if (!args.noCode) {
-      stages.push(await withErrorContext("sync:code", () => runCodeImport(args), "gstack-gbrain-sync"));
-    }
-    if (!args.noMemory) {
-      stages.push(await withErrorContext("sync:memory", () => runMemoryIngest(args), "gstack-gbrain-sync"));
-    }
-    if (!args.noBrainSync) {
-      stages.push(await withErrorContext("sync:brain-sync", () => runBrainSyncPush(args), "gstack-gbrain-sync"));
-    }
+		if (!args.noCode) {
+			stages.push(
+				await withErrorContext(
+					"sync:code",
+					() => runCodeImport(args),
+					"gstack-gbrain-sync",
+				),
+			);
+		}
+		if (!args.noMemory) {
+			stages.push(
+				await withErrorContext(
+					"sync:memory",
+					() => runMemoryIngest(args),
+					"gstack-gbrain-sync",
+				),
+			);
+		}
+		if (!args.noBrainSync) {
+			stages.push(
+				await withErrorContext(
+					"sync:brain-sync",
+					() => runBrainSyncPush(args),
+					"gstack-gbrain-sync",
+				),
+			);
+		}
 
-    if (args.mode !== "dry-run") {
-      state.last_sync = new Date().toISOString();
-      if (args.mode === "full") state.last_full_sync = state.last_sync;
-      state.last_stages = stages;
-      saveSyncState(state);
-    }
+		if (args.mode !== "dry-run") {
+			state.last_sync = new Date().toISOString();
+			if (args.mode === "full") state.last_full_sync = state.last_sync;
+			state.last_stages = stages;
+			saveSyncState(state);
+		}
 
-    if (!args.quiet || args.mode === "dry-run") {
-      console.log(`\ngstack-gbrain-sync (${args.mode}):`);
-      for (const s of stages) console.log(formatStage(s));
-      const okCount = stages.filter((s) => s.ok).length;
-      const errCount = stages.filter((s) => !s.ok && s.ran).length;
-      console.log(`\n  ${okCount} ok, ${errCount} error, ${stages.length - okCount - errCount} skipped`);
-    }
+		if (!args.quiet || args.mode === "dry-run") {
+			console.log(`\ngstack-gbrain-sync (${args.mode}):`);
+			for (const s of stages) console.log(formatStage(s));
+			const okCount = stages.filter((s) => s.ok).length;
+			const errCount = stages.filter((s) => !s.ok && s.ran).length;
+			console.log(
+				`\n  ${okCount} ok, ${errCount} error, ${stages.length - okCount - errCount} skipped`,
+			);
+		}
 
-    const anyError = stages.some((s) => s.ran && !s.ok);
-    exitCode = anyError ? 1 : 0;
-  } finally {
-    cleanup();
-  }
+		const anyError = stages.some((s) => s.ran && !s.ok);
+		exitCode = anyError ? 1 : 0;
+	} finally {
+		cleanup();
+	}
 
-  process.exit(exitCode);
+	process.exit(exitCode);
 }
 
 main().catch((err) => {
-  console.error(`gstack-gbrain-sync fatal: ${err instanceof Error ? err.message : String(err)}`);
-  releaseLock();
-  process.exit(1);
+	console.error(
+		`gstack-gbrain-sync fatal: ${err instanceof Error ? err.message : String(err)}`,
+	);
+	releaseLock();
+	process.exit(1);
 });

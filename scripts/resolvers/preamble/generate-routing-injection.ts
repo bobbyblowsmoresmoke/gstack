@@ -1,7 +1,7 @@
-import type { TemplateContext } from '../types';
+import type { TemplateContext } from "../types";
 
 export function generateRoutingInjection(ctx: TemplateContext): string {
-  return `If \`HAS_ROUTING\` is \`no\` AND \`ROUTING_DECLINED\` is \`false\` AND \`PROACTIVE_PROMPTED\` is \`yes\`:
+	return `If \`HAS_ROUTING\` is \`no\` AND \`ROUTING_DECLINED\` is \`false\` AND \`PROACTIVE_PROMPTED\` is \`yes\`:
 Check if a CLAUDE.md file exists in the project root. If it does not exist, create it.
 
 Use AskUserQuestion:

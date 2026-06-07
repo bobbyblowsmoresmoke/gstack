@@ -12,7 +12,7 @@
  * consistent.
  */
 
-import type { Browser, BrowserContext } from 'playwright';
+import type { Browser, BrowserContext } from "playwright";
 
 /**
  * Init script applied to every page in a context. Runs in the page's main
@@ -26,7 +26,7 @@ export const WEBDRIVER_MASK_SCRIPT = `Object.defineProperty(navigator, 'webdrive
  * Called by browser-manager.launch() and launchHeaded().
  */
 export async function applyStealth(context: BrowserContext): Promise<void> {
-  await context.addInitScript({ content: WEBDRIVER_MASK_SCRIPT });
+	await context.addInitScript({ content: WEBDRIVER_MASK_SCRIPT });
 }
 
 /**
@@ -35,5 +35,5 @@ export async function applyStealth(context: BrowserContext): Promise<void> {
  * script — it changes how Chromium identifies itself in the protocol layer.
  */
 export const STEALTH_LAUNCH_ARGS = [
-  '--disable-blink-features=AutomationControlled',
+	"--disable-blink-features=AutomationControlled",
 ];

@@ -1,6 +1,6 @@
 {
-  "scripts": {
-    "setup": "bin/dev-setup",
-    "archive": "bin/dev-teardown"
-  }
+	"scripts": {
+		"setup": "bin/dev-setup",
+		"archive": "bin/dev-teardown"
+	}
 }

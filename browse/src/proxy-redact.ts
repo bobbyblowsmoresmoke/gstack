@@ -6,7 +6,7 @@
  * every log path that prints proxy config.
  */
 
-const REDACTED = '***';
+const REDACTED = "***";
 
 /**
  * Redact creds in a proxy URL string. Returns the URL with username and
@@ -15,16 +15,16 @@ const REDACTED = '***';
  * AND contain creds).
  */
 export function redactProxyUrl(input: string | null | undefined): string {
-  if (!input) return '<no proxy>';
-  let url: URL;
-  try {
-    url = new URL(input);
-  } catch {
-    return '<malformed proxy url>';
-  }
-  if (url.username) url.username = REDACTED;
-  if (url.password) url.password = REDACTED;
-  return url.toString();
+	if (!input) return "<no proxy>";
+	let url: URL;
+	try {
+		url = new URL(input);
+	} catch {
+		return "<malformed proxy url>";
+	}
+	if (url.username) url.username = REDACTED;
+	if (url.password) url.password = REDACTED;
+	return url.toString();
 }
 
 /**
@@ -32,15 +32,15 @@ export function redactProxyUrl(input: string | null | undefined): string {
  * Returns a plain object suitable for logging.
  */
 export function redactUpstream(upstream: {
-  host: string;
-  port: number;
-  userId?: string;
-  password?: string;
+	host: string;
+	port: number;
+	userId?: string;
+	password?: string;
 }): { host: string; port: number; userId?: string; password?: string } {
-  return {
-    host: upstream.host,
-    port: upstream.port,
-    ...(upstream.userId ? { userId: REDACTED } : {}),
-    ...(upstream.password ? { password: REDACTED } : {}),
-  };
+	return {
+		host: upstream.host,
+		port: upstream.port,
+		...(upstream.userId ? { userId: REDACTED } : {}),
+		...(upstream.password ? { password: REDACTED } : {}),
+	};
 }

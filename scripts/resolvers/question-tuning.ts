@@ -9,10 +9,10 @@
  * All sections are runtime-gated by the `QUESTION_TUNING` preamble echo.
  * When `QUESTION_TUNING: false`, agents skip the entire section.
  */
-import type { TemplateContext } from './types';
+import type { TemplateContext } from "./types";
 
 function binDir(ctx: TemplateContext): string {
-  return ctx.host === 'codex' ? '$GSTACK_BIN' : ctx.paths.binDir;
+	return ctx.host === "codex" ? "$GSTACK_BIN" : ctx.paths.binDir;
 }
 
 /**
@@ -20,8 +20,8 @@ function binDir(ctx: TemplateContext): string {
  * Kept deliberately terse; canonical reference is docs/designs/PLAN_TUNING_V0.md.
  */
 export function generateQuestionTuning(ctx: TemplateContext): string {
-  const bin = binDir(ctx);
-  return `## Question Tuning (skip entirely if \`QUESTION_TUNING: false\`)
+	const bin = binDir(ctx);
+	return `## Question Tuning (skip entirely if \`QUESTION_TUNING: false\`)
 
 Before each AskUserQuestion, choose \`question_id\` from \`scripts/question-registry.ts\` or \`{skill}-{slug}\`, then run \`${bin}/gstack-question-preference --check "<id>"\`. \`AUTO_DECIDE\` means choose the recommended option and say "Auto-decided [summary] → [option] (your preference). Change with /plan-tune." \`ASK_NORMALLY\` means ask.
 
@@ -44,16 +44,16 @@ Exit code 2 = rejected as not user-originated; do not retry. On success: "Set \`
 
 // Per-phase generators for unit tests and à-la-carte use.
 export function generateQuestionPreferenceCheck(ctx: TemplateContext): string {
-  const bin = binDir(ctx);
-  return `## Question Preference Check (skip if \`QUESTION_TUNING: false\`)
+	const bin = binDir(ctx);
+	return `## Question Preference Check (skip if \`QUESTION_TUNING: false\`)
 
 Before each AskUserQuestion, run: \`${bin}/gstack-question-preference --check "<id>"\`.
 \`AUTO_DECIDE\` → auto-choose recommended with inline annotation. \`ASK_NORMALLY\` → ask.`;
 }
 
 export function generateQuestionLog(ctx: TemplateContext): string {
-  const bin = binDir(ctx);
-  return `## Question Log (skip if \`QUESTION_TUNING: false\`)
+	const bin = binDir(ctx);
+	return `## Question Log (skip if \`QUESTION_TUNING: false\`)
 
 After each AskUserQuestion:
 \`\`\`bash
@@ -62,8 +62,8 @@ ${bin}/gstack-question-log '{"skill":"${ctx.skillName}","question_id":"<id>","qu
 }
 
 export function generateInlineTuneFeedback(ctx: TemplateContext): string {
-  const bin = binDir(ctx);
-  return `## Inline Tune Feedback (skip if \`QUESTION_TUNING: false\`; two-way only)
+	const bin = binDir(ctx);
+	return `## Inline Tune Feedback (skip if \`QUESTION_TUNING: false\`; two-way only)
 
 Offer: "Reply \`tune: never-ask\`/\`always-ask\` or free-form."
 

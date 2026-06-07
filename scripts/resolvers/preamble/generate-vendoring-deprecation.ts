@@ -1,7 +1,7 @@
-import type { TemplateContext } from '../types';
+import type { TemplateContext } from "../types";
 
 export function generateVendoringDeprecation(ctx: TemplateContext): string {
-  return `If \`VENDORED_GSTACK\` is \`yes\`, warn once via AskUserQuestion unless \`~/.gstack/.vendoring-warned-$SLUG\` exists:
+	return `If \`VENDORED_GSTACK\` is \`yes\`, warn once via AskUserQuestion unless \`~/.gstack/.vendoring-warned-$SLUG\` exists:
 
 > This project has gstack vendored in \`.claude/skills/gstack/\`. Vendoring is deprecated.
 > Migrate to team mode?

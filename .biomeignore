@@ -1,0 +1,7 @@
+browse/test/**/*
+design/test/**/*
+make-pdf/test/**/*
+scripts/**/*
+supabase/**/*
+test/**/*
+browse/src/bun-polyfill.cjs

@@ -32,201 +32,201 @@
  * Stderr: structured telemetry (SERVE_STARTED, SERVE_FEEDBACK_RECEIVED, etc.)
  */
 
+import { spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { spawn } from "child_process";
 
 export interface ServeOptions {
-  html: string;
-  port?: number;
-  hostname?: string; // default '127.0.0.1' — localhost only
-  timeout?: number; // seconds, default 600 (10 min)
+	html: string;
+	port?: number;
+	hostname?: string; // default '127.0.0.1' — localhost only
+	timeout?: number; // seconds, default 600 (10 min)
 }
 
 type ServerState = "serving" | "regenerating" | "done";
 
 export async function serve(options: ServeOptions): Promise<void> {
-  const { html, port = 0, hostname = "127.0.0.1", timeout = 600 } = options;
+	const { html, port = 0, hostname = "127.0.0.1", timeout = 600 } = options;
 
-  // Validate HTML file exists
-  if (!fs.existsSync(html)) {
-    console.error(`SERVE_ERROR: HTML file not found: ${html}`);
-    process.exit(1);
-  }
+	// Validate HTML file exists
+	if (!fs.existsSync(html)) {
+		console.error(`SERVE_ERROR: HTML file not found: ${html}`);
+		process.exit(1);
+	}
 
-  // Security: anchor all file reads to the initial HTML's directory.
-  // Prevents /api/reload from reading arbitrary files via path traversal.
-  const allowedDir = fs.realpathSync(path.dirname(path.resolve(html)));
+	// Security: anchor all file reads to the initial HTML's directory.
+	// Prevents /api/reload from reading arbitrary files via path traversal.
+	const allowedDir = fs.realpathSync(path.dirname(path.resolve(html)));
 
-  let htmlContent = fs.readFileSync(html, "utf-8");
-  let state: ServerState = "serving";
-  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+	let htmlContent = fs.readFileSync(html, "utf-8");
+	let state: ServerState = "serving";
+	let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const server = Bun.serve({
-    port,
-    hostname,
-    fetch(req) {
-      const url = new URL(req.url);
+	const server = Bun.serve({
+		port,
+		hostname,
+		fetch(req) {
+			const url = new URL(req.url);
 
-      // Serve the comparison board HTML
-      if (
-        req.method === "GET" &&
-        (url.pathname === "/" || url.pathname === "/index.html")
-      ) {
-        // Inject the server URL so the board can POST feedback
-        const injected = htmlContent.replace(
-          "</head>",
-          `<script>window.__GSTACK_SERVER_URL = ${JSON.stringify(url.origin)};</script>\n</head>`,
-        );
-        return new Response(injected, {
-          headers: { "Content-Type": "text/html; charset=utf-8" },
-        });
-      }
+			// Serve the comparison board HTML
+			if (
+				req.method === "GET" &&
+				(url.pathname === "/" || url.pathname === "/index.html")
+			) {
+				// Inject the server URL so the board can POST feedback
+				const injected = htmlContent.replace(
+					"</head>",
+					`<script>window.__GSTACK_SERVER_URL = ${JSON.stringify(url.origin)};</script>\n</head>`,
+				);
+				return new Response(injected, {
+					headers: { "Content-Type": "text/html; charset=utf-8" },
+				});
+			}
 
-      // Progress polling endpoint (used by board during regeneration)
-      if (req.method === "GET" && url.pathname === "/api/progress") {
-        return Response.json({ status: state });
-      }
+			// Progress polling endpoint (used by board during regeneration)
+			if (req.method === "GET" && url.pathname === "/api/progress") {
+				return Response.json({ status: state });
+			}
 
-      // Feedback submission from the board
-      if (req.method === "POST" && url.pathname === "/api/feedback") {
-        return handleFeedback(req);
-      }
+			// Feedback submission from the board
+			if (req.method === "POST" && url.pathname === "/api/feedback") {
+				return handleFeedback(req);
+			}
 
-      // Reload endpoint (used by the agent to swap in new board HTML)
-      if (req.method === "POST" && url.pathname === "/api/reload") {
-        return handleReload(req);
-      }
+			// Reload endpoint (used by the agent to swap in new board HTML)
+			if (req.method === "POST" && url.pathname === "/api/reload") {
+				return handleReload(req);
+			}
 
-      return new Response("Not found", { status: 404 });
-    },
-  });
+			return new Response("Not found", { status: 404 });
+		},
+	});
 
-  const actualPort = server.port;
-  const boardUrl = `http://127.0.0.1:${actualPort}`;
+	const actualPort = server.port;
+	const boardUrl = `http://127.0.0.1:${actualPort}`;
 
-  console.error(`SERVE_STARTED: port=${actualPort} html=${html}`);
+	console.error(`SERVE_STARTED: port=${actualPort} html=${html}`);
 
-  // Auto-open in user's default browser
-  openBrowser(boardUrl);
+	// Auto-open in user's default browser
+	openBrowser(boardUrl);
 
-  // Set timeout
-  timeoutTimer = setTimeout(() => {
-    console.error(`SERVE_TIMEOUT: after=${timeout}s`);
-    server.stop();
-    process.exit(1);
-  }, timeout * 1000);
+	// Set timeout
+	timeoutTimer = setTimeout(() => {
+		console.error(`SERVE_TIMEOUT: after=${timeout}s`);
+		server.stop();
+		process.exit(1);
+	}, timeout * 1000);
 
-  async function handleFeedback(req: Request): Promise<Response> {
-    let body: any;
-    try {
-      body = await req.json();
-    } catch {
-      return Response.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+	async function handleFeedback(req: Request): Promise<Response> {
+		let body: any;
+		try {
+			body = await req.json();
+		} catch {
+			return Response.json({ error: "Invalid JSON" }, { status: 400 });
+		}
 
-    // Validate expected shape
-    if (typeof body !== "object" || body === null) {
-      return Response.json({ error: "Expected JSON object" }, { status: 400 });
-    }
+		// Validate expected shape
+		if (typeof body !== "object" || body === null) {
+			return Response.json({ error: "Expected JSON object" }, { status: 400 });
+		}
 
-    const isSubmit = body.regenerated === false;
-    const isRegenerate = body.regenerated === true;
-    const action = isSubmit
-      ? "submitted"
-      : body.regenerateAction || "regenerate";
+		const isSubmit = body.regenerated === false;
+		const isRegenerate = body.regenerated === true;
+		const action = isSubmit
+			? "submitted"
+			: body.regenerateAction || "regenerate";
 
-    console.error(`SERVE_FEEDBACK_RECEIVED: type=${action}`);
+		console.error(`SERVE_FEEDBACK_RECEIVED: type=${action}`);
 
-    // Print feedback JSON to stdout (for foreground mode)
-    console.log(JSON.stringify(body));
+		// Print feedback JSON to stdout (for foreground mode)
+		console.log(JSON.stringify(body));
 
-    // ALWAYS write feedback to disk so the agent can poll for it
-    // (agent typically backgrounds $D serve, can't read stdout)
-    const feedbackDir = path.dirname(html);
-    const feedbackFile = isSubmit ? "feedback.json" : "feedback-pending.json";
-    const feedbackPath = path.join(feedbackDir, feedbackFile);
-    fs.writeFileSync(feedbackPath, JSON.stringify(body, null, 2));
+		// ALWAYS write feedback to disk so the agent can poll for it
+		// (agent typically backgrounds $D serve, can't read stdout)
+		const feedbackDir = path.dirname(html);
+		const feedbackFile = isSubmit ? "feedback.json" : "feedback-pending.json";
+		const feedbackPath = path.join(feedbackDir, feedbackFile);
+		fs.writeFileSync(feedbackPath, JSON.stringify(body, null, 2));
 
-    if (isSubmit) {
-      state = "done";
-      if (timeoutTimer) clearTimeout(timeoutTimer);
+		if (isSubmit) {
+			state = "done";
+			if (timeoutTimer) clearTimeout(timeoutTimer);
 
-      // Give the response time to send before exiting
-      setTimeout(() => {
-        server.stop();
-        process.exit(0);
-      }, 100);
+			// Give the response time to send before exiting
+			setTimeout(() => {
+				server.stop();
+				process.exit(0);
+			}, 100);
 
-      return Response.json({ received: true, action: "submitted" });
-    }
+			return Response.json({ received: true, action: "submitted" });
+		}
 
-    if (isRegenerate) {
-      state = "regenerating";
-      // Reset timeout for regeneration (agent needs time to generate new variants)
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      timeoutTimer = setTimeout(() => {
-        console.error(`SERVE_TIMEOUT: after=${timeout}s (during regeneration)`);
-        server.stop();
-        process.exit(1);
-      }, timeout * 1000);
+		if (isRegenerate) {
+			state = "regenerating";
+			// Reset timeout for regeneration (agent needs time to generate new variants)
+			if (timeoutTimer) clearTimeout(timeoutTimer);
+			timeoutTimer = setTimeout(() => {
+				console.error(`SERVE_TIMEOUT: after=${timeout}s (during regeneration)`);
+				server.stop();
+				process.exit(1);
+			}, timeout * 1000);
 
-      return Response.json({ received: true, action: "regenerate" });
-    }
+			return Response.json({ received: true, action: "regenerate" });
+		}
 
-    return Response.json({ received: true, action: "unknown" });
-  }
+		return Response.json({ received: true, action: "unknown" });
+	}
 
-  async function handleReload(req: Request): Promise<Response> {
-    let body: any;
-    try {
-      body = await req.json();
-    } catch {
-      return Response.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+	async function handleReload(req: Request): Promise<Response> {
+		let body: any;
+		try {
+			body = await req.json();
+		} catch {
+			return Response.json({ error: "Invalid JSON" }, { status: 400 });
+		}
 
-    const newHtmlPath = body.html;
-    if (!newHtmlPath || !fs.existsSync(newHtmlPath)) {
-      return Response.json(
-        { error: `HTML file not found: ${newHtmlPath}` },
-        { status: 400 },
-      );
-    }
+		const newHtmlPath = body.html;
+		if (!newHtmlPath || !fs.existsSync(newHtmlPath)) {
+			return Response.json(
+				{ error: `HTML file not found: ${newHtmlPath}` },
+				{ status: 400 },
+			);
+		}
 
-    // Security: resolve symlinks and validate the reload path is within the
-    // allowed directory (anchored to the initial HTML file's parent).
-    // Prevents path traversal via /api/reload reading arbitrary files.
-    const resolvedReload = fs.realpathSync(path.resolve(newHtmlPath));
-    if (
-      !resolvedReload.startsWith(allowedDir + path.sep) &&
-      resolvedReload !== allowedDir
-    ) {
-      return Response.json(
-        { error: `Path must be within: ${allowedDir}` },
-        { status: 403 },
-      );
-    }
+		// Security: resolve symlinks and validate the reload path is within the
+		// allowed directory (anchored to the initial HTML file's parent).
+		// Prevents path traversal via /api/reload reading arbitrary files.
+		const resolvedReload = fs.realpathSync(path.resolve(newHtmlPath));
+		if (
+			!resolvedReload.startsWith(allowedDir + path.sep) &&
+			resolvedReload !== allowedDir
+		) {
+			return Response.json(
+				{ error: `Path must be within: ${allowedDir}` },
+				{ status: 403 },
+			);
+		}
 
-    // Swap the HTML content
-    htmlContent = fs.readFileSync(resolvedReload, "utf-8");
-    state = "serving";
+		// Swap the HTML content
+		htmlContent = fs.readFileSync(resolvedReload, "utf-8");
+		state = "serving";
 
-    console.error(`SERVE_RELOADED: html=${newHtmlPath}`);
+		console.error(`SERVE_RELOADED: html=${newHtmlPath}`);
 
-    // Reset timeout
-    if (timeoutTimer) clearTimeout(timeoutTimer);
-    timeoutTimer = setTimeout(() => {
-      console.error(`SERVE_TIMEOUT: after=${timeout}s`);
-      server.stop();
-      process.exit(1);
-    }, timeout * 1000);
+		// Reset timeout
+		if (timeoutTimer) clearTimeout(timeoutTimer);
+		timeoutTimer = setTimeout(() => {
+			console.error(`SERVE_TIMEOUT: after=${timeout}s`);
+			server.stop();
+			process.exit(1);
+		}, timeout * 1000);
 
-    return Response.json({ reloaded: true });
-  }
+		return Response.json({ reloaded: true });
+	}
 
-  // Keep the process alive
-  await new Promise(() => {});
+	// Keep the process alive
+	await new Promise(() => {});
 }
 
 /**
@@ -234,30 +234,30 @@ export async function serve(options: ServeOptions): Promise<void> {
  * Handles macOS (open), Linux (xdg-open), and headless environments.
  */
 function openBrowser(url: string): void {
-  const platform = process.platform;
-  let cmd: string;
+	const platform = process.platform;
+	let cmd: string;
 
-  if (platform === "darwin") {
-    cmd = "open";
-  } else if (platform === "linux") {
-    cmd = "xdg-open";
-  } else {
-    // Windows or unknown — just print the URL
-    console.error(`SERVE_BROWSER_MANUAL: url=${url}`);
-    console.error(`Open this URL in your browser: ${url}`);
-    return;
-  }
+	if (platform === "darwin") {
+		cmd = "open";
+	} else if (platform === "linux") {
+		cmd = "xdg-open";
+	} else {
+		// Windows or unknown — just print the URL
+		console.error(`SERVE_BROWSER_MANUAL: url=${url}`);
+		console.error(`Open this URL in your browser: ${url}`);
+		return;
+	}
 
-  try {
-    const child = spawn(cmd, [url], {
-      stdio: "ignore",
-      detached: true,
-    });
-    child.unref();
-    console.error(`SERVE_BROWSER_OPENED: url=${url}`);
-  } catch {
-    // open/xdg-open not available (headless CI environment)
-    console.error(`SERVE_BROWSER_MANUAL: url=${url}`);
-    console.error(`Open this URL in your browser: ${url}`);
-  }
+	try {
+		const child = spawn(cmd, [url], {
+			stdio: "ignore",
+			detached: true,
+		});
+		child.unref();
+		console.error(`SERVE_BROWSER_OPENED: url=${url}`);
+	} catch {
+		// open/xdg-open not available (headless CI environment)
+		console.error(`SERVE_BROWSER_MANUAL: url=${url}`);
+		console.error(`Open this URL in your browser: ${url}`);
+	}
 }

@@ -21,116 +21,125 @@
  * tests don't need it).
  */
 
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 /** Strip ANSI escapes for pattern-matching against visible text. */
 export function stripAnsi(s: string): string {
-  return s
-    .replace(/\x1b\[[\d;]*[a-zA-Z]/g, '')
-    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
-    .replace(/\x1b[()][AB012]/g, '')
-    .replace(/\x1b[78=>]/g, '');
+	return s
+		.replace(/\x1b\[[\d;]*[a-zA-Z]/g, "")
+		.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "")
+		.replace(/\x1b[()][AB012]/g, "")
+		.replace(/\x1b[78=>]/g, "");
 }
 
 /** Find claude on PATH, with fallback locations. Mirrors terminal-agent.ts. */
 export function resolveClaudeBinary(): string | null {
-  const override = process.env.BROWSE_TERMINAL_BINARY;
-  if (override && fs.existsSync(override)) return override;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const which = (Bun as any).which?.('claude');
-  if (which) return which;
-  const candidates = [
-    '/opt/homebrew/bin/claude',
-    '/usr/local/bin/claude',
-    `${process.env.HOME}/.local/bin/claude`,
-    `${process.env.HOME}/.bun/bin/claude`,
-    `${process.env.HOME}/.npm-global/bin/claude`,
-  ];
-  for (const c of candidates) {
-    try {
-      fs.accessSync(c, fs.constants.X_OK);
-      return c;
-    } catch {
-      /* keep searching */
-    }
-  }
-  return null;
+	const override = process.env.BROWSE_TERMINAL_BINARY;
+	if (override && fs.existsSync(override)) return override;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const which = (Bun as any).which?.("claude");
+	if (which) return which;
+	const candidates = [
+		"/opt/homebrew/bin/claude",
+		"/usr/local/bin/claude",
+		`${process.env.HOME}/.local/bin/claude`,
+		`${process.env.HOME}/.bun/bin/claude`,
+		`${process.env.HOME}/.npm-global/bin/claude`,
+	];
+	for (const c of candidates) {
+		try {
+			fs.accessSync(c, fs.constants.X_OK);
+			return c;
+		} catch {
+			/* keep searching */
+		}
+	}
+	return null;
 }
 
 export interface ClaudePtyOptions {
-  /**
-   * Permission mode for the session.
-   *  - 'plan' (default) — launches with --permission-mode plan
-   *  - undefined — no --permission-mode flag at all (regular interactive)
-   *  Other valid SDK modes ('default', 'acceptEdits', 'bypassPermissions',
-   *  'auto', 'dontAsk') are passed through verbatim.
-   */
-  permissionMode?: 'plan' | 'default' | 'acceptEdits' | 'bypassPermissions' | 'auto' | 'dontAsk' | null;
-  /** Extra args after the permission-mode flag. */
-  extraArgs?: string[];
-  /** Terminal size. Default 120x40. Plan-mode UI lays out cleanly at this size. */
-  cols?: number;
-  rows?: number;
-  /** Working directory. Default: process.cwd(). The repo cwd has the gstack
-   *  skill registry and trusted-folder cookie, so most tests want this. */
-  cwd?: string;
-  /** Extra env on top of process.env. */
-  env?: Record<string, string>;
-  /** Total run timeout (ms). Default 240000 (4 min). */
-  timeoutMs?: number;
+	/**
+	 * Permission mode for the session.
+	 *  - 'plan' (default) — launches with --permission-mode plan
+	 *  - undefined — no --permission-mode flag at all (regular interactive)
+	 *  Other valid SDK modes ('default', 'acceptEdits', 'bypassPermissions',
+	 *  'auto', 'dontAsk') are passed through verbatim.
+	 */
+	permissionMode?:
+		| "plan"
+		| "default"
+		| "acceptEdits"
+		| "bypassPermissions"
+		| "auto"
+		| "dontAsk"
+		| null;
+	/** Extra args after the permission-mode flag. */
+	extraArgs?: string[];
+	/** Terminal size. Default 120x40. Plan-mode UI lays out cleanly at this size. */
+	cols?: number;
+	rows?: number;
+	/** Working directory. Default: process.cwd(). The repo cwd has the gstack
+	 *  skill registry and trusted-folder cookie, so most tests want this. */
+	cwd?: string;
+	/** Extra env on top of process.env. */
+	env?: Record<string, string>;
+	/** Total run timeout (ms). Default 240000 (4 min). */
+	timeoutMs?: number;
 }
 
 export interface ClaudePtySession {
-  /** Send raw bytes to PTY stdin. Newlines = "\r" in TTY world. */
-  send(data: string): void;
-  /** Send a key by name. Limited set used by these tests. */
-  sendKey(key: 'Enter' | 'Up' | 'Down' | 'Esc' | 'Tab' | 'ShiftTab' | 'CtrlC'): void;
-  /** Raw accumulated stdout (with ANSI). For forensics. */
-  rawOutput(): string;
-  /** Visible (ANSI-stripped) output for the entire session. For pattern matching. */
-  visibleText(): string;
-  /**
-   * Mark the current buffer position. Subsequent waitForAny / visibleSince
-   * calls only look at output AFTER this mark. Use to scope assertions to
-   * "after I sent the skill command" — avoids matching against the trust
-   * dialog or boot banner residue. Returns a marker handle.
-   */
-  mark(): number;
-  /** Visible text since the most recent (or specific) mark. */
-  visibleSince(marker?: number): string;
-  /**
-   * Wait for any of the supplied patterns to appear in visibleText. Resolves
-   * with the first match. Throws on timeout (with last 2KB of visible text).
-   * If `since` is supplied, only matches text after that mark.
-   */
-  waitForAny(
-    patterns: Array<RegExp | string>,
-    opts?: { timeoutMs?: number; pollMs?: number; since?: number },
-  ): Promise<{ matched: RegExp | string; index: number }>;
-  /** Convenience: single-pattern wait. */
-  waitFor(
-    pattern: RegExp | string,
-    opts?: { timeoutMs?: number; pollMs?: number; since?: number },
-  ): Promise<void>;
-  /** Process pid (for debug). */
-  pid(): number | undefined;
-  /** Whether the underlying process has exited. */
-  exited(): boolean;
-  /** Exit code, if known. */
-  exitCode(): number | null;
-  /**
-   * Send SIGINT, then SIGKILL after 1s. Always safe to call multiple times.
-   * Awaits process exit before resolving.
-   */
-  close(): Promise<void>;
+	/** Send raw bytes to PTY stdin. Newlines = "\r" in TTY world. */
+	send(data: string): void;
+	/** Send a key by name. Limited set used by these tests. */
+	sendKey(
+		key: "Enter" | "Up" | "Down" | "Esc" | "Tab" | "ShiftTab" | "CtrlC",
+	): void;
+	/** Raw accumulated stdout (with ANSI). For forensics. */
+	rawOutput(): string;
+	/** Visible (ANSI-stripped) output for the entire session. For pattern matching. */
+	visibleText(): string;
+	/**
+	 * Mark the current buffer position. Subsequent waitForAny / visibleSince
+	 * calls only look at output AFTER this mark. Use to scope assertions to
+	 * "after I sent the skill command" — avoids matching against the trust
+	 * dialog or boot banner residue. Returns a marker handle.
+	 */
+	mark(): number;
+	/** Visible text since the most recent (or specific) mark. */
+	visibleSince(marker?: number): string;
+	/**
+	 * Wait for any of the supplied patterns to appear in visibleText. Resolves
+	 * with the first match. Throws on timeout (with last 2KB of visible text).
+	 * If `since` is supplied, only matches text after that mark.
+	 */
+	waitForAny(
+		patterns: Array<RegExp | string>,
+		opts?: { timeoutMs?: number; pollMs?: number; since?: number },
+	): Promise<{ matched: RegExp | string; index: number }>;
+	/** Convenience: single-pattern wait. */
+	waitFor(
+		pattern: RegExp | string,
+		opts?: { timeoutMs?: number; pollMs?: number; since?: number },
+	): Promise<void>;
+	/** Process pid (for debug). */
+	pid(): number | undefined;
+	/** Whether the underlying process has exited. */
+	exited(): boolean;
+	/** Exit code, if known. */
+	exitCode(): number | null;
+	/**
+	 * Send SIGINT, then SIGKILL after 1s. Always safe to call multiple times.
+	 * Awaits process exit before resolving.
+	 */
+	close(): Promise<void>;
 }
 
 /** Detect the workspace-trust dialog rendering. */
 export function isTrustDialogVisible(visible: string): boolean {
-  // Phrase Claude Code prints. Stable across versions in this branch's range.
-  return visible.includes('trust this folder');
+	// Phrase Claude Code prints. Stable across versions in this branch's range.
+	return visible.includes("trust this folder");
 }
 
 /**
@@ -141,9 +150,9 @@ export function isTrustDialogVisible(visible: string): boolean {
  * "readytoexecute" depending on the rendering path.
  */
 export function isPlanReadyVisible(visible: string): boolean {
-  if (/ready to execute|Would you like to proceed/i.test(visible)) return true;
-  const collapsed = visible.replace(/\s+/g, '');
-  return /readytoexecute|Wouldyouliketoproceed/i.test(collapsed);
+	if (/ready to execute|Would you like to proceed/i.test(visible)) return true;
+	const collapsed = visible.replace(/\s+/g, "");
+	return /readytoexecute|Wouldyouliketoproceed/i.test(collapsed);
 }
 
 /**
@@ -156,11 +165,12 @@ export function isPlanReadyVisible(visible: string): boolean {
  * isPlanReadyVisible.
  */
 export function isAutoDecidedVisible(visible: string): boolean {
-  const stemMatch =
-    /Auto-decided\b/i.test(visible) || /Auto-decided/i.test(visible.replace(/\s+/g, ''));
-  if (!stemMatch) return false;
-  if (/\(your preference\)/i.test(visible)) return true;
-  return /\(yourpreference\)/i.test(visible.replace(/\s+/g, ''));
+	const stemMatch =
+		/Auto-decided\b/i.test(visible) ||
+		/Auto-decided/i.test(visible.replace(/\s+/g, ""));
+	if (!stemMatch) return false;
+	if (/\(your preference\)/i.test(visible)) return true;
+	return /\(yourpreference\)/i.test(visible.replace(/\s+/g, ""));
 }
 
 /**
@@ -182,35 +192,36 @@ export function isAutoDecidedVisible(visible: string): boolean {
  * surface any decisions").
  */
 export function extractPlanFilePath(visible: string): string | null {
-  // Patterns checked in order of specificity. Each captures the .md path.
-  // The visible buffer may have stripAnsi-collapsed whitespace ("yet at" can
-  // become "yetat"), so the captured path MUST start at a clear path-anchor
-  // character: `~/`, `/Users/`, `/home/`, `/var/`, or `/tmp/`. Anchoring on
-  // these prefixes prevents earlier non-whitespace characters from being
-  // glommed into the path (real bug seen in the wild: `yetat/Users/...`).
-  const PATH_ANCHOR = '(~\\/|\\/Users\\/|\\/home\\/|\\/var\\/|\\/tmp\\/|\\.\\/)';
-  const patterns: RegExp[] = [
-    new RegExp(`Plan\\s*saved\\s*to\\s*:?\\s*(${PATH_ANCHOR}\\S+\\.md)`, 'i'),
-    new RegExp(`Plan\\s*file\\s*:?\\s*(${PATH_ANCHOR}\\S+\\.md)`, 'i'),
-    new RegExp(`·\\s*(${PATH_ANCHOR}\\S*\\.claude\\/plans\\/\\S+\\.md)`, 'i'),
-    // Fallback: any path-anchored reference to a .claude/plans .md file.
-    new RegExp(`(${PATH_ANCHOR}\\S*\\.claude\\/plans\\/[\\w-]+\\.md)`, 'i'),
-  ];
-  for (const p of patterns) {
-    const m = visible.match(p);
-    if (m && m[1]) {
-      let raw = m[1];
-      // Strip trailing punctuation that some patterns may capture.
-      raw = raw.replace(/\.+$/, '.md').replace(/\.md\.+$/, '.md');
-      // Tilde expansion to absolute path.
-      if (raw.startsWith('~')) {
-        const home = process.env.HOME ?? '';
-        raw = home + raw.slice(1);
-      }
-      return raw;
-    }
-  }
-  return null;
+	// Patterns checked in order of specificity. Each captures the .md path.
+	// The visible buffer may have stripAnsi-collapsed whitespace ("yet at" can
+	// become "yetat"), so the captured path MUST start at a clear path-anchor
+	// character: `~/`, `/Users/`, `/home/`, `/var/`, or `/tmp/`. Anchoring on
+	// these prefixes prevents earlier non-whitespace characters from being
+	// glommed into the path (real bug seen in the wild: `yetat/Users/...`).
+	const PATH_ANCHOR =
+		"(~\\/|\\/Users\\/|\\/home\\/|\\/var\\/|\\/tmp\\/|\\.\\/)";
+	const patterns: RegExp[] = [
+		new RegExp(`Plan\\s*saved\\s*to\\s*:?\\s*(${PATH_ANCHOR}\\S+\\.md)`, "i"),
+		new RegExp(`Plan\\s*file\\s*:?\\s*(${PATH_ANCHOR}\\S+\\.md)`, "i"),
+		new RegExp(`·\\s*(${PATH_ANCHOR}\\S*\\.claude\\/plans\\/\\S+\\.md)`, "i"),
+		// Fallback: any path-anchored reference to a .claude/plans .md file.
+		new RegExp(`(${PATH_ANCHOR}\\S*\\.claude\\/plans\\/[\\w-]+\\.md)`, "i"),
+	];
+	for (const p of patterns) {
+		const m = visible.match(p);
+		if (m && m[1]) {
+			let raw = m[1];
+			// Strip trailing punctuation that some patterns may capture.
+			raw = raw.replace(/\.+$/, ".md").replace(/\.md\.+$/, ".md");
+			// Tilde expansion to absolute path.
+			if (raw.startsWith("~")) {
+				const home = process.env.HOME ?? "";
+				raw = home + raw.slice(1);
+			}
+			return raw;
+		}
+	}
+	return null;
 }
 
 /**
@@ -225,12 +236,12 @@ export function extractPlanFilePath(visible: string): string | null {
  * false if the file is unreadable, missing, or has no decisions section.
  */
 export function planFileHasDecisionsSection(planFile: string): boolean {
-  try {
-    const content = fs.readFileSync(planFile, 'utf-8');
-    return /^##\s+Decisions\b/im.test(content);
-  } catch {
-    return false;
-  }
+	try {
+		const content = fs.readFileSync(planFile, "utf-8");
+		return /^##\s+Decisions\b/im.test(content);
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -263,38 +274,38 @@ export const TAIL_SCAN_BYTES = 1500;
  * remain unconditional.
  */
 export function isPermissionDialogVisible(visible: string): boolean {
-  // Standalone signatures — high specificity, never appear in skill questions.
-  if (/requested\s+permissions?\s+to/i.test(visible)) return true;
-  // "Yes / Yes, allow all edits / No" shape — file-edit permission grants.
-  if (/\ballow\s+all\s+edits\b/i.test(visible)) return true;
-  // "Yes, and always allow access to <dir>" shape — workspace trust.
-  if (/always\s+allow\s+access\s+to/i.test(visible)) return true;
-  // Bash command permission prompts.
-  if (/Bash\s+command\s+.*\s+requires\s+permission/i.test(visible)) return true;
-  // "Do you want to proceed?" only counts as a permission dialog when paired
-  // with a file-edit context. Skill questions can use the bare phrase.
-  if (
-    /Do\s+you\s+want\s+to\s+proceed\?/i.test(visible) &&
-    /(Edit|Write)\s+to\s+\S+/i.test(visible)
-  ) {
-    return true;
-  }
-  return false;
+	// Standalone signatures — high specificity, never appear in skill questions.
+	if (/requested\s+permissions?\s+to/i.test(visible)) return true;
+	// "Yes / Yes, allow all edits / No" shape — file-edit permission grants.
+	if (/\ballow\s+all\s+edits\b/i.test(visible)) return true;
+	// "Yes, and always allow access to <dir>" shape — workspace trust.
+	if (/always\s+allow\s+access\s+to/i.test(visible)) return true;
+	// Bash command permission prompts.
+	if (/Bash\s+command\s+.*\s+requires\s+permission/i.test(visible)) return true;
+	// "Do you want to proceed?" only counts as a permission dialog when paired
+	// with a file-edit context. Skill questions can use the bare phrase.
+	if (
+		/Do\s+you\s+want\s+to\s+proceed\?/i.test(visible) &&
+		/(Edit|Write)\s+to\s+\S+/i.test(visible)
+	) {
+		return true;
+	}
+	return false;
 }
 
 /** Detect any AskUserQuestion-shaped numbered option list with cursor. */
 export function isNumberedOptionListVisible(visible: string): boolean {
-  // ❯ cursor + at least two numbered options 1-9.
-  // Matches the trust dialog AND plan-ready prompt AND skill questions.
-  // Tighter classification happens via scope (after-trust, after-skill-cmd, etc).
-  //
-  // Note on the `2\.` regex: the TTY uses cursor-positioning escape codes
-  // (`\x1b[40C`) for whitespace which stripAnsi removes — collapsing
-  // `text 2.` to `text2.`. A `\b2\.` word-boundary regex therefore fails
-  // because `t-2` is a word-to-word transition. We use the weaker
-  // `[^0-9]2\.` to require a non-digit before `2` (so we don't match
-  // `12.0`) without requiring whitespace.
-  return /❯\s*1\./.test(visible) && /(^|[^0-9])2\./.test(visible);
+	// ❯ cursor + at least two numbered options 1-9.
+	// Matches the trust dialog AND plan-ready prompt AND skill questions.
+	// Tighter classification happens via scope (after-trust, after-skill-cmd, etc).
+	//
+	// Note on the `2\.` regex: the TTY uses cursor-positioning escape codes
+	// (`\x1b[40C`) for whitespace which stripAnsi removes — collapsing
+	// `text 2.` to `text2.`. A `\b2\.` word-boundary regex therefore fails
+	// because `t-2` is a word-to-word transition. We use the weaker
+	// `[^0-9]2\.` to require a non-digit before `2` (so we don't match
+	// `12.0`) without requiring whitespace.
+	return /❯\s*1\./.test(visible) && /(^|[^0-9])2\./.test(visible);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -320,16 +331,16 @@ export function isNumberedOptionListVisible(visible: string): boolean {
 // ~/.gstack/analytics/pty-judge.jsonl for offline analysis.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { spawnSync as nodeSpawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { spawnSync as nodeSpawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 export interface PtyStateVerdict {
-  state: 'waiting' | 'working' | 'hung' | 'unknown';
-  reasoning: string;
-  /** SHA-1 of the normalized snapshot input (for caching/dedup). */
-  hash: string;
-  /** Wall time (ms) the judge call took. */
-  elapsedMs: number;
+	state: "waiting" | "working" | "hung" | "unknown";
+	reasoning: string;
+	/** SHA-1 of the normalized snapshot input (for caching/dedup). */
+	hash: string;
+	/** Wall time (ms) the judge call took. */
+	elapsedMs: number;
 }
 
 const PTY_VERDICT_CACHE = new Map<string, PtyStateVerdict>();
@@ -340,13 +351,13 @@ const PTY_VERDICT_CACHE = new Map<string, PtyStateVerdict>();
  * so the harness never fails on logging.
  */
 function logPtyJudge(record: Record<string, unknown>): void {
-  try {
-    const dir = `${process.env.HOME}/.gstack/analytics`;
-    fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(`${dir}/pty-judge.jsonl`, JSON.stringify(record) + '\n');
-  } catch {
-    /* best-effort */
-  }
+	try {
+		const dir = `${process.env.HOME}/.gstack/analytics`;
+		fs.mkdirSync(dir, { recursive: true });
+		fs.appendFileSync(`${dir}/pty-judge.jsonl`, JSON.stringify(record) + "\n");
+	} catch {
+		/* best-effort */
+	}
 }
 
 /**
@@ -354,20 +365,23 @@ function logPtyJudge(record: Record<string, unknown>): void {
  * Writes the last 4KB of visible TTY plus context to
  * ~/.gstack/analytics/pty-snapshots/<testName>-<elapsed>ms.txt.
  */
-export function logPtySnapshot(visible: string, ctx: { testName: string; elapsedMs: number; tag?: string }): void {
-  if (process.env.GSTACK_PTY_LOG !== '1') return;
-  try {
-    const dir = `${process.env.HOME}/.gstack/analytics/pty-snapshots`;
-    fs.mkdirSync(dir, { recursive: true });
-    const tag = ctx.tag ? `-${ctx.tag}` : '';
-    const file = `${dir}/${ctx.testName}-${ctx.elapsedMs}ms${tag}.txt`;
-    fs.writeFileSync(
-      file,
-      `# testName: ${ctx.testName}\n# elapsedMs: ${ctx.elapsedMs}\n# tag: ${ctx.tag ?? ''}\n# visible.length: ${visible.length}\n\n${visible.slice(-4096)}`,
-    );
-  } catch {
-    /* best-effort */
-  }
+export function logPtySnapshot(
+	visible: string,
+	ctx: { testName: string; elapsedMs: number; tag?: string },
+): void {
+	if (process.env.GSTACK_PTY_LOG !== "1") return;
+	try {
+		const dir = `${process.env.HOME}/.gstack/analytics/pty-snapshots`;
+		fs.mkdirSync(dir, { recursive: true });
+		const tag = ctx.tag ? `-${ctx.tag}` : "";
+		const file = `${dir}/${ctx.testName}-${ctx.elapsedMs}ms${tag}.txt`;
+		fs.writeFileSync(
+			file,
+			`# testName: ${ctx.testName}\n# elapsedMs: ${ctx.elapsedMs}\n# tag: ${ctx.tag ?? ""}\n# visible.length: ${visible.length}\n\n${visible.slice(-4096)}`,
+		);
+	} catch {
+		/* best-effort */
+	}
 }
 
 /**
@@ -382,20 +396,20 @@ export function logPtySnapshot(visible: string, ctx: { testName: string; elapsed
  * re-calling. Cache lives in-process; resets between test runs.
  */
 export function judgePtyState(
-  visible: string,
-  ctx?: { testName?: string },
+	visible: string,
+	ctx?: { testName?: string },
 ): PtyStateVerdict {
-  // Normalize: strip trailing whitespace lines + take last 4KB. Hash the
-  // normalized form so spinner-frame-only diffs (which all look "working")
-  // don't bust the cache and rack up cost.
-  const tail = visible.slice(-4096).replace(/[ \t]+$/gm, '');
-  const hash = createHash('sha1').update(tail).digest('hex').slice(0, 16);
+	// Normalize: strip trailing whitespace lines + take last 4KB. Hash the
+	// normalized form so spinner-frame-only diffs (which all look "working")
+	// don't bust the cache and rack up cost.
+	const tail = visible.slice(-4096).replace(/[ \t]+$/gm, "");
+	const hash = createHash("sha1").update(tail).digest("hex").slice(0, 16);
 
-  const cached = PTY_VERDICT_CACHE.get(hash);
-  if (cached) return cached;
+	const cached = PTY_VERDICT_CACHE.get(hash);
+	if (cached) return cached;
 
-  const judgeStart = Date.now();
-  const prompt = `You are reading a snapshot of a terminal where Claude Code is running in plan mode for an automated test. Your job: classify the agent's current state.
+	const judgeStart = Date.now();
+	const prompt = `You are reading a snapshot of a terminal where Claude Code is running in plan mode for an automated test. Your job: classify the agent's current state.
 
 Pick exactly ONE:
 - WAITING — agent surfaced a question or option list and is sitting at the input prompt waiting for user reply. Signs: numbered/lettered options visible (1./2./3. or A)/B)/C)), "Recommendation:" line, cursor at empty input prompt with no recent generation activity.
@@ -410,74 +424,87 @@ Terminal snapshot (last 4KB):
 ${tail}
 \`\`\``;
 
-  let verdict: PtyStateVerdict = {
-    state: 'unknown',
-    reasoning: 'judge call did not complete',
-    hash,
-    elapsedMs: 0,
-  };
+	let verdict: PtyStateVerdict = {
+		state: "unknown",
+		reasoning: "judge call did not complete",
+		hash,
+		elapsedMs: 0,
+	};
 
-  try {
-    const result = nodeSpawnSync(
-      'claude',
-      ['-p', '--model', 'claude-haiku-4-5', '--max-turns', '1'],
-      {
-        input: prompt,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: 30_000,
-        encoding: 'utf-8',
-      },
-    );
-    const elapsedMs = Date.now() - judgeStart;
-    if (result.status === 0 && result.stdout) {
-      // Pull the first {...} JSON object out of stdout. Haiku occasionally
-      // wraps in ```json ...``` despite the prompt; tolerate that.
-      const match = result.stdout.match(/\{[\s\S]*?"state"[\s\S]*?\}/);
-      if (match) {
-        try {
-          const parsed = JSON.parse(match[0]);
-          const state = ['waiting', 'working', 'hung'].includes(parsed.state)
-            ? (parsed.state as 'waiting' | 'working' | 'hung')
-            : 'unknown';
-          verdict = {
-            state,
-            reasoning: typeof parsed.reasoning === 'string' ? parsed.reasoning.slice(0, 200) : '',
-            hash,
-            elapsedMs,
-          };
-        } catch {
-          verdict = { state: 'unknown', reasoning: 'malformed JSON', hash, elapsedMs };
-        }
-      } else {
-        verdict = { state: 'unknown', reasoning: 'no JSON in response', hash, elapsedMs };
-      }
-    } else {
-      verdict = {
-        state: 'unknown',
-        reasoning: `claude exited ${result.status} (${(result.stderr ?? '').slice(0, 80)})`,
-        hash,
-        elapsedMs,
-      };
-    }
-  } catch (err) {
-    verdict = {
-      state: 'unknown',
-      reasoning: `judge spawn failed: ${(err as Error).message}`.slice(0, 200),
-      hash,
-      elapsedMs: Date.now() - judgeStart,
-    };
-  }
+	try {
+		const result = nodeSpawnSync(
+			"claude",
+			["-p", "--model", "claude-haiku-4-5", "--max-turns", "1"],
+			{
+				input: prompt,
+				stdio: ["pipe", "pipe", "pipe"],
+				timeout: 30_000,
+				encoding: "utf-8",
+			},
+		);
+		const elapsedMs = Date.now() - judgeStart;
+		if (result.status === 0 && result.stdout) {
+			// Pull the first {...} JSON object out of stdout. Haiku occasionally
+			// wraps in ```json ...``` despite the prompt; tolerate that.
+			const match = result.stdout.match(/\{[\s\S]*?"state"[\s\S]*?\}/);
+			if (match) {
+				try {
+					const parsed = JSON.parse(match[0]);
+					const state = ["waiting", "working", "hung"].includes(parsed.state)
+						? (parsed.state as "waiting" | "working" | "hung")
+						: "unknown";
+					verdict = {
+						state,
+						reasoning:
+							typeof parsed.reasoning === "string"
+								? parsed.reasoning.slice(0, 200)
+								: "",
+						hash,
+						elapsedMs,
+					};
+				} catch {
+					verdict = {
+						state: "unknown",
+						reasoning: "malformed JSON",
+						hash,
+						elapsedMs,
+					};
+				}
+			} else {
+				verdict = {
+					state: "unknown",
+					reasoning: "no JSON in response",
+					hash,
+					elapsedMs,
+				};
+			}
+		} else {
+			verdict = {
+				state: "unknown",
+				reasoning: `claude exited ${result.status} (${(result.stderr ?? "").slice(0, 80)})`,
+				hash,
+				elapsedMs,
+			};
+		}
+	} catch (err) {
+		verdict = {
+			state: "unknown",
+			reasoning: `judge spawn failed: ${(err as Error).message}`.slice(0, 200),
+			hash,
+			elapsedMs: Date.now() - judgeStart,
+		};
+	}
 
-  PTY_VERDICT_CACHE.set(hash, verdict);
-  logPtyJudge({
-    ts: new Date().toISOString(),
-    testName: ctx?.testName ?? 'unknown',
-    state: verdict.state,
-    reasoning: verdict.reasoning,
-    hash: verdict.hash,
-    judgeMs: verdict.elapsedMs,
-  });
-  return verdict;
+	PTY_VERDICT_CACHE.set(hash, verdict);
+	logPtyJudge({
+		ts: new Date().toISOString(),
+		testName: ctx?.testName ?? "unknown",
+		state: verdict.state,
+		reasoning: verdict.reasoning,
+		hash: verdict.hash,
+		judgeMs: verdict.elapsedMs,
+	});
+	return verdict;
 }
 
 /**
@@ -505,40 +532,40 @@ ${tail}
  * isPermissionDialogVisible callers in classifyVisible).
  */
 export function isProseAUQVisible(visible: string): boolean {
-  const tail = visible.length > 4096 ? visible.slice(-4096) : visible;
+	const tail = visible.length > 4096 ? visible.slice(-4096) : visible;
 
-  // Pattern 1: 2+ distinct lettered options at line starts. Allow leading
-  // whitespace or `❯` cursor before the marker. PTY may collapse multiple
-  // option lines onto one logical line via stripped cursor-positioning
-  // escapes, but the NEWLINE before each option survives.
-  const letteredRe = /(?:^|\n)[ \t❯]*([A-D])\)/g;
-  const letteredHits = new Set<string>();
-  let lm: RegExpExecArray | null;
-  while ((lm = letteredRe.exec(tail)) !== null) {
-    if (lm[1]) letteredHits.add(lm[1]);
-  }
-  if (letteredHits.size >= 2) return true;
+	// Pattern 1: 2+ distinct lettered options at line starts. Allow leading
+	// whitespace or `❯` cursor before the marker. PTY may collapse multiple
+	// option lines onto one logical line via stripped cursor-positioning
+	// escapes, but the NEWLINE before each option survives.
+	const letteredRe = /(?:^|\n)[ \t❯]*([A-D])\)/g;
+	const letteredHits = new Set<string>();
+	let lm: RegExpExecArray | null;
+	while ((lm = letteredRe.exec(tail)) !== null) {
+		if (lm[1]) letteredHits.add(lm[1]);
+	}
+	if (letteredHits.size >= 2) return true;
 
-  // Pattern 2: 2+ distinct numbered options at line starts, AND no
-  // `❯<spaces>1.` cursor IN THE RECENT TAIL (not the full buffer — a
-  // trust-dialog `❯ 1. Yes` at boot is in scrollback forever and
-  // would otherwise suppress this path for the rest of the run).
-  // The native-UI deferral only applies when the cursor list is
-  // currently rendered, not historically.
-  //
-  // Threshold 2 (matching the lettered branch): the tail is a 4KB window,
-  // and by the time the polling loop sees it, the model may have emitted
-  // option 1 several KB earlier and only 2/3/4 remain in tail. False
-  // positives on prose ("First, x. Second, y.") are extremely rare given
-  // the line-start anchor + the no-cursor gate.
-  if (/❯\s*1\./.test(tail)) return false;
-  const numberedRe = /(?:^|\n)[ \t❯]*([1-9])\./g;
-  const numberedHits = new Set<string>();
-  let nm: RegExpExecArray | null;
-  while ((nm = numberedRe.exec(tail)) !== null) {
-    if (nm[1]) numberedHits.add(nm[1]);
-  }
-  return numberedHits.size >= 2;
+	// Pattern 2: 2+ distinct numbered options at line starts, AND no
+	// `❯<spaces>1.` cursor IN THE RECENT TAIL (not the full buffer — a
+	// trust-dialog `❯ 1. Yes` at boot is in scrollback forever and
+	// would otherwise suppress this path for the rest of the run).
+	// The native-UI deferral only applies when the cursor list is
+	// currently rendered, not historically.
+	//
+	// Threshold 2 (matching the lettered branch): the tail is a 4KB window,
+	// and by the time the polling loop sees it, the model may have emitted
+	// option 1 several KB earlier and only 2/3/4 remain in tail. False
+	// positives on prose ("First, x. Second, y.") are extremely rare given
+	// the line-start anchor + the no-cursor gate.
+	if (/❯\s*1\./.test(tail)) return false;
+	const numberedRe = /(?:^|\n)[ \t❯]*([1-9])\./g;
+	const numberedHits = new Set<string>();
+	let nm: RegExpExecArray | null;
+	while ((nm = numberedRe.exec(tail)) !== null) {
+		if (nm[1]) numberedHits.add(nm[1]);
+	}
+	return numberedHits.size >= 2;
 }
 
 /**
@@ -559,100 +586,100 @@ export function isProseAUQVisible(visible: string): boolean {
  * `(recommended)` markers, etc).
  */
 export function parseNumberedOptions(
-  visible: string,
+	visible: string,
 ): Array<{ index: number; label: string }> {
-  const tail = visible.length > 4096 ? visible.slice(-4096) : visible;
-  // Split on lines, look for `❯ N.` or `  N.` patterns. Up to N=9.
-  // The `\s*` after `.` (not `\s+`) is required because stripAnsi removes
-  // TTY cursor-positioning escapes that render as spaces, so a label that
-  // visually reads "1. Option" can come through as "1.Option".
-  const optionRe = /^[\s❯]*([1-9])\.\s*(\S.*?)\s*$/;
-  // We anchor on the LATEST `❯ 1.` line in the buffer — the cursor marker
-  // for the active AskUserQuestion. Older numbered lists (e.g., a granted permission
-  // dialog still in scrollback) sit above it and must be ignored. Without
-  // this, parseNumberedOptions returns stale options after the dialog is
-  // dismissed.
-  const lines = tail.split('\n');
-  // Anchor on the LAST line containing `❯<spaces>1.` ANYWHERE on the line.
-  // The /plan-*-review skill's box-layout AUQ uses TTY cursor-positioning
-  // escapes that stripAnsi removes — leaving the cursor `❯1.` mid-line,
-  // after dividers + header + prompt text on the same logical line. The
-  // earlier `^\s*❯` anchor missed those entirely.
-  let cursorLineIdx = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/❯\s*1\./.test(lines[i] ?? '')) {
-      cursorLineIdx = i;
-      break;
-    }
-  }
-  // Fallback: if cursor isn't on option 1 (user pressed Down), find the
-  // last `1.` line. Allow leading `  ` or `❯ ` prefixes; do NOT include `❯`
-  // in the leading character class because greedy matching would eat the
-  // sigil and prevent the literal-cursor anchor above from finding it.
-  if (cursorLineIdx < 0) {
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (/^(?:\s*|\s*❯\s+)1\./.test(lines[i] ?? '')) {
-        cursorLineIdx = i;
-        break;
-      }
-    }
-  }
-  if (cursorLineIdx < 0) return [];
-  const found: Array<{ index: number; label: string }> = [];
-  const seenIndices = new Set<number>();
+	const tail = visible.length > 4096 ? visible.slice(-4096) : visible;
+	// Split on lines, look for `❯ N.` or `  N.` patterns. Up to N=9.
+	// The `\s*` after `.` (not `\s+`) is required because stripAnsi removes
+	// TTY cursor-positioning escapes that render as spaces, so a label that
+	// visually reads "1. Option" can come through as "1.Option".
+	const optionRe = /^[\s❯]*([1-9])\.\s*(\S.*?)\s*$/;
+	// We anchor on the LATEST `❯ 1.` line in the buffer — the cursor marker
+	// for the active AskUserQuestion. Older numbered lists (e.g., a granted permission
+	// dialog still in scrollback) sit above it and must be ignored. Without
+	// this, parseNumberedOptions returns stale options after the dialog is
+	// dismissed.
+	const lines = tail.split("\n");
+	// Anchor on the LAST line containing `❯<spaces>1.` ANYWHERE on the line.
+	// The /plan-*-review skill's box-layout AUQ uses TTY cursor-positioning
+	// escapes that stripAnsi removes — leaving the cursor `❯1.` mid-line,
+	// after dividers + header + prompt text on the same logical line. The
+	// earlier `^\s*❯` anchor missed those entirely.
+	let cursorLineIdx = -1;
+	for (let i = lines.length - 1; i >= 0; i--) {
+		if (/❯\s*1\./.test(lines[i] ?? "")) {
+			cursorLineIdx = i;
+			break;
+		}
+	}
+	// Fallback: if cursor isn't on option 1 (user pressed Down), find the
+	// last `1.` line. Allow leading `  ` or `❯ ` prefixes; do NOT include `❯`
+	// in the leading character class because greedy matching would eat the
+	// sigil and prevent the literal-cursor anchor above from finding it.
+	if (cursorLineIdx < 0) {
+		for (let i = lines.length - 1; i >= 0; i--) {
+			if (/^(?:\s*|\s*❯\s+)1\./.test(lines[i] ?? "")) {
+				cursorLineIdx = i;
+				break;
+			}
+		}
+	}
+	if (cursorLineIdx < 0) return [];
+	const found: Array<{ index: number; label: string }> = [];
+	const seenIndices = new Set<number>();
 
-  // Cursor line: option 1 may be inline after box dividers + prompt header
-  // (`...divider...header...❯1. label`). Use a non-anchored regex that
-  // captures `❯N. label` from anywhere on the line through end-of-line.
-  // Only used for the cursor line — subsequent options are parsed with the
-  // start-of-line `optionRe`.
-  const cursorLine = lines[cursorLineIdx] ?? '';
-  const cursorInlineRe = /❯\s*([1-9])\.\s*(\S.*?)\s*$/;
-  const inlineMatch = cursorInlineRe.exec(cursorLine);
-  if (inlineMatch) {
-    const idx = Number(inlineMatch[1]);
-    const label = (inlineMatch[2] ?? '').trim();
-    if (label.length > 0 && !seenIndices.has(idx)) {
-      seenIndices.add(idx);
-      found.push({ index: idx, label });
-    }
-  } else {
-    // No inline cursor match — fall back to start-of-line regex.
-    const startMatch = optionRe.exec(cursorLine);
-    if (startMatch) {
-      const idx = Number(startMatch[1]);
-      const label = (startMatch[2] ?? '').trim();
-      if (label.length > 0 && !seenIndices.has(idx)) {
-        seenIndices.add(idx);
-        found.push({ index: idx, label });
-      }
-    }
-  }
+	// Cursor line: option 1 may be inline after box dividers + prompt header
+	// (`...divider...header...❯1. label`). Use a non-anchored regex that
+	// captures `❯N. label` from anywhere on the line through end-of-line.
+	// Only used for the cursor line — subsequent options are parsed with the
+	// start-of-line `optionRe`.
+	const cursorLine = lines[cursorLineIdx] ?? "";
+	const cursorInlineRe = /❯\s*([1-9])\.\s*(\S.*?)\s*$/;
+	const inlineMatch = cursorInlineRe.exec(cursorLine);
+	if (inlineMatch) {
+		const idx = Number(inlineMatch[1]);
+		const label = (inlineMatch[2] ?? "").trim();
+		if (label.length > 0 && !seenIndices.has(idx)) {
+			seenIndices.add(idx);
+			found.push({ index: idx, label });
+		}
+	} else {
+		// No inline cursor match — fall back to start-of-line regex.
+		const startMatch = optionRe.exec(cursorLine);
+		if (startMatch) {
+			const idx = Number(startMatch[1]);
+			const label = (startMatch[2] ?? "").trim();
+			if (label.length > 0 && !seenIndices.has(idx)) {
+				seenIndices.add(idx);
+				found.push({ index: idx, label });
+			}
+		}
+	}
 
-  // Subsequent lines: standard start-of-line option parsing.
-  for (let i = cursorLineIdx + 1; i < lines.length; i++) {
-    const m = optionRe.exec(lines[i] ?? '');
-    if (!m) continue;
-    const idx = Number(m[1]);
-    const label = (m[2] ?? '').trim();
-    if (seenIndices.has(idx)) continue;
-    if (label.length === 0) continue;
-    seenIndices.add(idx);
-    found.push({ index: idx, label });
-  }
-  // Only return if we found a sequential 1.., 2.., ... block (at least 2
-  // consecutive options starting at 1). Otherwise it's noise (e.g. a
-  // numbered list inside prose, like "1. Read the file").
-  found.sort((a, b) => a.index - b.index);
-  if (found.length < 2) return [];
-  if (found[0]!.index !== 1) return [];
-  for (let i = 1; i < found.length; i++) {
-    if (found[i]!.index !== found[i - 1]!.index + 1) {
-      // Truncate at the first gap.
-      return found.slice(0, i);
-    }
-  }
-  return found;
+	// Subsequent lines: standard start-of-line option parsing.
+	for (let i = cursorLineIdx + 1; i < lines.length; i++) {
+		const m = optionRe.exec(lines[i] ?? "");
+		if (!m) continue;
+		const idx = Number(m[1]);
+		const label = (m[2] ?? "").trim();
+		if (seenIndices.has(idx)) continue;
+		if (label.length === 0) continue;
+		seenIndices.add(idx);
+		found.push({ index: idx, label });
+	}
+	// Only return if we found a sequential 1.., 2.., ... block (at least 2
+	// consecutive options starting at 1). Otherwise it's noise (e.g. a
+	// numbered list inside prose, like "1. Read the file").
+	found.sort((a, b) => a.index - b.index);
+	if (found.length < 2) return [];
+	if (found[0]!.index !== 1) return [];
+	for (let i = 1; i < found.length; i++) {
+		if (found[i]!.index !== found[i - 1]!.index + 1) {
+			// Truncate at the first gap.
+			return found.slice(0, i);
+		}
+	}
+	return found;
 }
 
 /**
@@ -665,7 +692,8 @@ export function parseNumberedOptions(
  * source of truth — when /plan-ceo-review adds a fifth mode, one regex updates
  * everywhere instead of drifting per-test.
  */
-export const MODE_RE = /HOLD SCOPE|SCOPE EXPANSION|SELECTIVE EXPANSION|SCOPE REDUCTION/i;
+export const MODE_RE =
+	/HOLD SCOPE|SCOPE EXPANSION|SELECTIVE EXPANSION|SCOPE REDUCTION/i;
 
 /**
  * Stable signature for a parsed numbered-option list — used by tests to detect
@@ -676,12 +704,12 @@ export const MODE_RE = /HOLD SCOPE|SCOPE EXPANSION|SELECTIVE EXPANSION|SCOPE RED
  * even though `parseNumberedOptions` already returns indices in ascending order.
  */
 export function optionsSignature(
-  opts: Array<{ index: number; label: string }>,
+	opts: Array<{ index: number; label: string }>,
 ): string {
-  return [...opts]
-    .sort((a, b) => a.index - b.index)
-    .map((o) => `${o.index}:${o.label}`)
-    .join('|');
+	return [...opts]
+		.sort((a, b) => a.index - b.index)
+		.map((o) => `${o.index}:${o.label}`)
+		.join("|");
 }
 
 /**
@@ -697,19 +725,19 @@ export function optionsSignature(
  * since they need the session handle.
  */
 export type ClassifyResult =
-  | { outcome: 'silent_write'; summary: string }
-  | { outcome: 'wrote_findings_before_asking'; summary: string }
-  | { outcome: 'auto_decided'; summary: string }
-  | { outcome: 'plan_ready'; summary: string }
-  | { outcome: 'asked'; summary: string }
-  | null;
+	| { outcome: "silent_write"; summary: string }
+	| { outcome: "wrote_findings_before_asking"; summary: string }
+	| { outcome: "auto_decided"; summary: string }
+	| { outcome: "plan_ready"; summary: string }
+	| { outcome: "asked"; summary: string }
+	| null;
 
 const SANCTIONED_WRITE_SUBSTRINGS = [
-  '.claude/plans',
-  '.gstack/',
-  '/.context/',
-  'CHANGELOG.md',
-  'TODOS.md',
+	".claude/plans",
+	".gstack/",
+	"/.context/",
+	"CHANGELOG.md",
+	"TODOS.md",
 ];
 
 /**
@@ -721,115 +749,122 @@ const SANCTIONED_WRITE_SUBSTRINGS = [
  * before asking").
  */
 function findFirstAuqRenderIndex(visible: string): number {
-  const re = /❯\s*1\./g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(visible)) !== null) {
-    // 200 bytes back + TAIL_SCAN_BYTES forward gives enough context for
-    // isPermissionDialogVisible to recognize the typical permission UI.
-    const surroundStart = Math.max(0, m.index - 200);
-    const surroundEnd = Math.min(visible.length, m.index + TAIL_SCAN_BYTES);
-    const surround = visible.slice(surroundStart, surroundEnd);
-    if (!isPermissionDialogVisible(surround)) {
-      return m.index;
-    }
-  }
-  return -1;
+	const re = /❯\s*1\./g;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(visible)) !== null) {
+		// 200 bytes back + TAIL_SCAN_BYTES forward gives enough context for
+		// isPermissionDialogVisible to recognize the typical permission UI.
+		const surroundStart = Math.max(0, m.index - 200);
+		const surroundEnd = Math.min(visible.length, m.index + TAIL_SCAN_BYTES);
+		const surround = visible.slice(surroundStart, surroundEnd);
+		if (!isPermissionDialogVisible(surround)) {
+			return m.index;
+		}
+	}
+	return -1;
 }
 
 export function classifyVisible(
-  visible: string,
-  opts?: {
-    /**
-     * When true, treat Write/Edit to `.claude/plans/*` BEFORE any
-     * AskUserQuestion render as `wrote_findings_before_asking` rather than
-     * letting the sanctioned-write list silently approve it. Used by tests
-     * that seed a draft plan with guaranteed-finding-triggering complexity
-     * (D3-B), where a pre-AUQ plan write is the precise transcript bug.
-     * Default false — preserves existing behavior for unseeded smoke tests
-     * where zero-findings → write plan → plan_ready is legitimate.
-     */
-    strictPlanWrites?: boolean;
-  },
+	visible: string,
+	opts?: {
+		/**
+		 * When true, treat Write/Edit to `.claude/plans/*` BEFORE any
+		 * AskUserQuestion render as `wrote_findings_before_asking` rather than
+		 * letting the sanctioned-write list silently approve it. Used by tests
+		 * that seed a draft plan with guaranteed-finding-triggering complexity
+		 * (D3-B), where a pre-AUQ plan write is the precise transcript bug.
+		 * Default false — preserves existing behavior for unseeded smoke tests
+		 * where zero-findings → write plan → plan_ready is legitimate.
+		 */
+		strictPlanWrites?: boolean;
+	},
 ): ClassifyResult {
-  // Silent-write detection: any Write/Edit tool render that targets a path
-  // OUTSIDE the sanctioned dirs, AND no numbered prompt is currently on screen
-  // (a numbered prompt means a permission/AskUserQuestion is gating the write,
-  // not an actual silent write).
-  const writeRe = /⏺\s*(?:Write|Edit)\(([^)]+)\)/g;
-  let m: RegExpExecArray | null;
-  const auqRenderIdx = opts?.strictPlanWrites ? findFirstAuqRenderIndex(visible) : -1;
-  while ((m = writeRe.exec(visible)) !== null) {
-    const target = m[1] ?? '';
-    const writePos = m.index;
-    const isPlanWrite = target.includes('.claude/plans');
-    const sanctioned = SANCTIONED_WRITE_SUBSTRINGS.some((s) => target.includes(s));
+	// Silent-write detection: any Write/Edit tool render that targets a path
+	// OUTSIDE the sanctioned dirs, AND no numbered prompt is currently on screen
+	// (a numbered prompt means a permission/AskUserQuestion is gating the write,
+	// not an actual silent write).
+	const writeRe = /⏺\s*(?:Write|Edit)\(([^)]+)\)/g;
+	let m: RegExpExecArray | null;
+	const auqRenderIdx = opts?.strictPlanWrites
+		? findFirstAuqRenderIndex(visible)
+		: -1;
+	while ((m = writeRe.exec(visible)) !== null) {
+		const target = m[1] ?? "";
+		const writePos = m.index;
+		const isPlanWrite = target.includes(".claude/plans");
+		const sanctioned = SANCTIONED_WRITE_SUBSTRINGS.some((s) =>
+			target.includes(s),
+		);
 
-    // D4-B: when strictPlanWrites is on, plan writes that precede the first
-    // AUQ render are flagged. Legitimate end-of-workflow plan writes happen
-    // AFTER an AUQ has rendered (i.e., the user has been asked). The
-    // transcript bug is a plan write WITHOUT any AUQ render preceding it.
-    if (opts?.strictPlanWrites && isPlanWrite) {
-      if (auqRenderIdx < 0 || writePos < auqRenderIdx) {
-        return {
-          outcome: 'wrote_findings_before_asking',
-          summary: `Write/Edit to ${target} fired before any AskUserQuestion render`,
-        };
-      }
-      // post-AUQ plan write — legitimate, fall through to other writes
-      continue;
-    }
+		// D4-B: when strictPlanWrites is on, plan writes that precede the first
+		// AUQ render are flagged. Legitimate end-of-workflow plan writes happen
+		// AFTER an AUQ has rendered (i.e., the user has been asked). The
+		// transcript bug is a plan write WITHOUT any AUQ render preceding it.
+		if (opts?.strictPlanWrites && isPlanWrite) {
+			if (auqRenderIdx < 0 || writePos < auqRenderIdx) {
+				return {
+					outcome: "wrote_findings_before_asking",
+					summary: `Write/Edit to ${target} fired before any AskUserQuestion render`,
+				};
+			}
+			// post-AUQ plan write — legitimate, fall through to other writes
+			continue;
+		}
 
-    if (!sanctioned && !isNumberedOptionListVisible(visible)) {
-      return {
-        outcome: 'silent_write',
-        summary: `Write/Edit to ${target} fired before any AskUserQuestion`,
-      };
-    }
-  }
-  // 'auto_decided' must beat 'plan_ready': when AUTO_DECIDE fires upstream of
-  // plan-ready, both signals are visible by the time the polling loop checks.
-  // The annotation text is the more informative outcome — it explains WHY
-  // we got to plan_ready without surfacing the question.
-  if (isAutoDecidedVisible(visible)) {
-    return {
-      outcome: 'auto_decided',
-      summary:
-        'skill auto-decided an AskUserQuestion via the AUTO_DECIDE preamble (the user never saw the prompt)',
-    };
-  }
-  if (isPlanReadyVisible(visible)) {
-    return {
-      outcome: 'plan_ready',
-      summary: 'skill ran end-to-end and emitted plan-mode "Ready to execute" confirmation',
-    };
-  }
-  if (isNumberedOptionListVisible(visible)) {
-    // Permission dialogs render numbered lists too. Skip them — the
-    // bug we want to catch is "skill question never fired."
-    if (isPermissionDialogVisible(visible.slice(-TAIL_SCAN_BYTES))) {
-      return null;
-    }
-    return {
-      outcome: 'asked',
-      summary: 'skill fired a numbered-option prompt (AskUserQuestion or routing-injection)',
-    };
-  }
-  // Prose-rendered AUQ: model surfaced the question as lettered or numbered
-  // options in plain text (typical under --disallowedTools AskUserQuestion
-  // when no MCP variant is callable). The model is waiting for user input
-  // via the plan-mode input prompt rather than via the AUQ tool UI; this
-  // is still a legitimate "asked" surface — semantically equivalent to a
-  // tool-call AUQ from the test's perspective.
-  if (isProseAUQVisible(visible)) {
-    if (isPermissionDialogVisible(visible.slice(-TAIL_SCAN_BYTES))) {
-      return null;
-    }
-    return {
-      outcome: 'asked',
-      summary: 'skill rendered a prose-style AskUserQuestion (model waiting for user input)',
-    };
-  }
-  return null;
+		if (!sanctioned && !isNumberedOptionListVisible(visible)) {
+			return {
+				outcome: "silent_write",
+				summary: `Write/Edit to ${target} fired before any AskUserQuestion`,
+			};
+		}
+	}
+	// 'auto_decided' must beat 'plan_ready': when AUTO_DECIDE fires upstream of
+	// plan-ready, both signals are visible by the time the polling loop checks.
+	// The annotation text is the more informative outcome — it explains WHY
+	// we got to plan_ready without surfacing the question.
+	if (isAutoDecidedVisible(visible)) {
+		return {
+			outcome: "auto_decided",
+			summary:
+				"skill auto-decided an AskUserQuestion via the AUTO_DECIDE preamble (the user never saw the prompt)",
+		};
+	}
+	if (isPlanReadyVisible(visible)) {
+		return {
+			outcome: "plan_ready",
+			summary:
+				'skill ran end-to-end and emitted plan-mode "Ready to execute" confirmation',
+		};
+	}
+	if (isNumberedOptionListVisible(visible)) {
+		// Permission dialogs render numbered lists too. Skip them — the
+		// bug we want to catch is "skill question never fired."
+		if (isPermissionDialogVisible(visible.slice(-TAIL_SCAN_BYTES))) {
+			return null;
+		}
+		return {
+			outcome: "asked",
+			summary:
+				"skill fired a numbered-option prompt (AskUserQuestion or routing-injection)",
+		};
+	}
+	// Prose-rendered AUQ: model surfaced the question as lettered or numbered
+	// options in plain text (typical under --disallowedTools AskUserQuestion
+	// when no MCP variant is callable). The model is waiting for user input
+	// via the plan-mode input prompt rather than via the AUQ tool UI; this
+	// is still a legitimate "asked" surface — semantically equivalent to a
+	// tool-call AUQ from the test's perspective.
+	if (isProseAUQVisible(visible)) {
+		if (isPermissionDialogVisible(visible.slice(-TAIL_SCAN_BYTES))) {
+			return null;
+		}
+		return {
+			outcome: "asked",
+			summary:
+				"skill rendered a prose-style AskUserQuestion (model waiting for user input)",
+		};
+	}
+	return null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -852,16 +887,16 @@ export function classifyVisible(
  * question text get DIFFERENT signatures because the prompt is in the hash.
  */
 export interface AskUserQuestionFingerprint {
-  /** Stable hash combining normalized prompt text + options signature. */
-  signature: string;
-  /** First 240 chars of the rendered question prompt (post-normalization). */
-  promptSnippet: string;
-  /** Captured option labels, in index order. */
-  options: Array<{ index: number; label: string }>;
-  /** Wall-clock when first observed (ms since the helper started polling). */
-  observedAtMs: number;
-  /** True if observed BEFORE the Step-0 boundary fired. */
-  preReview: boolean;
+	/** Stable hash combining normalized prompt text + options signature. */
+	signature: string;
+	/** First 240 chars of the rendered question prompt (post-normalization). */
+	promptSnippet: string;
+	/** Captured option labels, in index order. */
+	options: Array<{ index: number; label: string }>;
+	/** Wall-clock when first observed (ms since the helper started polling). */
+	observedAtMs: number;
+	/** True if observed BEFORE the Step-0 boundary fired. */
+	preReview: boolean;
 }
 
 /**
@@ -875,7 +910,7 @@ export interface AskUserQuestionFingerprint {
  * output cadence. See plan §D14 for the rationale.
  */
 export type Step0BoundaryPredicate = (
-  answeredFingerprint: AskUserQuestionFingerprint,
+	answeredFingerprint: AskUserQuestionFingerprint,
 ) => boolean;
 
 /**
@@ -894,60 +929,61 @@ export type Step0BoundaryPredicate = (
  * the same options + empty prompt across two distinct questions collide.
  */
 export function parseQuestionPrompt(visible: string): string {
-  // Tail-only — older prompts higher in the buffer are stale.
-  const tail = visible.length > 4096 ? visible.slice(-4096) : visible;
-  const lines = tail.split('\n');
+	// Tail-only — older prompts higher in the buffer are stale.
+	const tail = visible.length > 4096 ? visible.slice(-4096) : visible;
+	const lines = tail.split("\n");
 
-  // Find the latest line containing `❯<spaces>1.` (matching parseNumberedOptions —
-  // unanchored to handle the box-layout case where cursor is mid-line after
-  // divider + header + prompt text on the same logical line).
-  let cursorLineIdx = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/❯\s*1\./.test(lines[i] ?? '')) {
-      cursorLineIdx = i;
-      break;
-    }
-  }
-  if (cursorLineIdx < 0) return '';
+	// Find the latest line containing `❯<spaces>1.` (matching parseNumberedOptions —
+	// unanchored to handle the box-layout case where cursor is mid-line after
+	// divider + header + prompt text on the same logical line).
+	let cursorLineIdx = -1;
+	for (let i = lines.length - 1; i >= 0; i--) {
+		if (/❯\s*1\./.test(lines[i] ?? "")) {
+			cursorLineIdx = i;
+			break;
+		}
+	}
+	if (cursorLineIdx < 0) return "";
 
-  // Box-layout case: prompt text may be ON the cursor line, BEFORE `❯1.`.
-  // Extract that prefix (after stripping leading box-drawing characters and
-  // dividers) as the last piece of the prompt — appended after any prior
-  // multi-line prompt text we walk up to find.
-  const cursorLine = lines[cursorLineIdx] ?? '';
-  let inlinePrompt = '';
-  const cursorPos = cursorLine.search(/❯\s*1\./);
-  if (cursorPos > 0) {
-    inlinePrompt = cursorLine
-      .slice(0, cursorPos)
-      // Strip box-drawing chars + dividers + leading checkbox sigil.
-      .replace(/^[─━┄┅┈┉─┌┐└┘├┤┬┴┼│┃☐□■\s]+/, '')
-      .trim();
-  }
+	// Box-layout case: prompt text may be ON the cursor line, BEFORE `❯1.`.
+	// Extract that prefix (after stripping leading box-drawing characters and
+	// dividers) as the last piece of the prompt — appended after any prior
+	// multi-line prompt text we walk up to find.
+	const cursorLine = lines[cursorLineIdx] ?? "";
+	let inlinePrompt = "";
+	const cursorPos = cursorLine.search(/❯\s*1\./);
+	if (cursorPos > 0) {
+		inlinePrompt = cursorLine
+			.slice(0, cursorPos)
+			// Strip box-drawing chars + dividers + leading checkbox sigil.
+			.replace(/^[─━┄┅┈┉─┌┐└┘├┤┬┴┼│┃☐□■\s]+/, "")
+			.trim();
+	}
 
-  // Walk up at most 6 lines collecting prompt text. Stop at:
-  //   - a blank line preceded by another blank line (paragraph break)
-  //   - top of buffer
-  //   - a line that itself starts with `N.` (we're inside an option list)
-  const promptLines: string[] = [];
-  let blankRun = 0;
-  for (let i = cursorLineIdx - 1; i >= 0 && promptLines.length < 6; i--) {
-    const raw = lines[i] ?? '';
-    const trimmed = raw.trim();
-    if (trimmed === '') {
-      blankRun += 1;
-      if (blankRun >= 2 && promptLines.length > 0) break;
-      continue;
-    }
-    blankRun = 0;
-    // Stop if we hit what looks like a previous numbered list.
-    if (/^[\s❯]*[1-9]\.\s+\S/.test(raw)) break;
-    promptLines.unshift(trimmed);
-  }
+	// Walk up at most 6 lines collecting prompt text. Stop at:
+	//   - a blank line preceded by another blank line (paragraph break)
+	//   - top of buffer
+	//   - a line that itself starts with `N.` (we're inside an option list)
+	const promptLines: string[] = [];
+	let blankRun = 0;
+	for (let i = cursorLineIdx - 1; i >= 0 && promptLines.length < 6; i--) {
+		const raw = lines[i] ?? "";
+		const trimmed = raw.trim();
+		if (trimmed === "") {
+			blankRun += 1;
+			if (blankRun >= 2 && promptLines.length > 0) break;
+			continue;
+		}
+		blankRun = 0;
+		// Stop if we hit what looks like a previous numbered list.
+		if (/^[\s❯]*[1-9]\.\s+\S/.test(raw)) break;
+		promptLines.unshift(trimmed);
+	}
 
-  const all = inlinePrompt.length > 0 ? [...promptLines, inlinePrompt] : promptLines;
-  const joined = all.join(' ').replace(/\s+/g, ' ').trim();
-  return joined.slice(0, 240);
+	const all =
+		inlinePrompt.length > 0 ? [...promptLines, inlinePrompt] : promptLines;
+	const joined = all.join(" ").replace(/\s+/g, " ").trim();
+	return joined.slice(0, 240);
 }
 
 /**
@@ -961,13 +997,13 @@ export function parseQuestionPrompt(visible: string): string {
  * Hex-encoded for diagnostic dumps.
  */
 export function auqFingerprint(
-  promptSnippet: string,
-  opts: Array<{ index: number; label: string }>,
+	promptSnippet: string,
+	opts: Array<{ index: number; label: string }>,
 ): string {
-  const normalized = promptSnippet.replace(/\s+/g, ' ').trim();
-  const sig = optionsSignature(opts);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (Bun as any).hash(normalized + '||' + sig).toString(16);
+	const normalized = promptSnippet.replace(/\s+/g, " ").trim();
+	const sig = optionsSignature(opts);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	return (Bun as any).hash(normalized + "||" + sig).toString(16);
 }
 
 /**
@@ -981,7 +1017,7 @@ export function auqFingerprint(
  * stop signal; this regex is the "we're done, go gracefully" hint.
  */
 export const COMPLETION_SUMMARY_RE =
-  /(GSTACK REVIEW REPORT|## Completion [Ss]ummary|Status:\s*(clean|issues_open)|^VERDICT:)/m;
+	/(GSTACK REVIEW REPORT|## Completion [Ss]ummary|Status:\s*(clean|issues_open)|^VERDICT:)/m;
 
 /**
  * Result of asserting that a plan file ends with `## GSTACK REVIEW REPORT`
@@ -990,9 +1026,9 @@ export const COMPLETION_SUMMARY_RE =
  * on failure to keep the success path cheap.
  */
 export interface ReviewReportAtBottomResult {
-  ok: boolean;
-  reason?: string;
-  trailingHeadings?: string[];
+	ok: boolean;
+	reason?: string;
+	trailingHeadings?: string[];
 }
 
 /**
@@ -1006,27 +1042,27 @@ export interface ReviewReportAtBottomResult {
  * silently today; this assertion catches both.
  */
 export function assertReviewReportAtBottom(
-  content: string,
+	content: string,
 ): ReviewReportAtBottomResult {
-  const re = /^## GSTACK REVIEW REPORT\s*$/m;
-  const match = re.exec(content);
-  if (!match) {
-    return { ok: false, reason: 'no GSTACK REVIEW REPORT section' };
-  }
-  const after = content.slice(match.index + match[0].length);
-  // Match any `## ` heading after the report. Reject `## ` followed by
-  // newline-only (trailing-whitespace ## headers) to avoid false positives.
-  const trailingHeadings = Array.from(
-    after.matchAll(/^## \S.*$/gm),
-  ).map((m) => m[0]);
-  if (trailingHeadings.length > 0) {
-    return {
-      ok: false,
-      reason: 'trailing ## heading(s) after GSTACK REVIEW REPORT',
-      trailingHeadings,
-    };
-  }
-  return { ok: true };
+	const re = /^## GSTACK REVIEW REPORT\s*$/m;
+	const match = re.exec(content);
+	if (!match) {
+		return { ok: false, reason: "no GSTACK REVIEW REPORT section" };
+	}
+	const after = content.slice(match.index + match[0].length);
+	// Match any `## ` heading after the report. Reject `## ` followed by
+	// newline-only (trailing-whitespace ## headers) to avoid false positives.
+	const trailingHeadings = Array.from(after.matchAll(/^## \S.*$/gm)).map(
+		(m) => m[0],
+	);
+	if (trailingHeadings.length > 0) {
+		return {
+			ok: false,
+			reason: "trailing ## heading(s) after GSTACK REVIEW REPORT",
+			trailingHeadings,
+		};
+	}
+	return { ok: true };
 }
 
 /**
@@ -1042,34 +1078,36 @@ export function assertReviewReportAtBottom(
  * so it also catches the report-missing case under `'asked'` /
  * `'wrote_findings_before_asking'` when a plan was already written.
  */
-export function assertReportAtBottomIfPlanWritten(
-  obs: { planFile?: string; evidence: string; outcome?: string },
-): void {
-  if (!obs.planFile) return;
-  // Skip when the plan file path was detected from TTY output but no file
-  // exists on disk. This happens when the model mentions a path mid-stream
-  // (e.g., as a tool-call argument that was interrupted, or in a draft that
-  // was never persisted). The report-at-bottom contract is for fully-written
-  // plan files; ENOENT means there's no file content to enforce against.
-  if (!fs.existsSync(obs.planFile)) return;
-  // Skip on 'asked' outcomes — these are smoke tests that exited at the
-  // first AUQ render (Step 0 only). The model never reached the workflow's
-  // report-writing step, so a partial plan file without the report section
-  // is the expected mid-flight state, not a contract violation. The
-  // report-at-bottom check applies to outcomes that imply the workflow
-  // ran end-to-end (plan_ready, completion_summary, etc.).
-  if (obs.outcome === 'asked') return;
-  const content = fs.readFileSync(obs.planFile, 'utf-8');
-  const verdict = assertReviewReportAtBottom(content);
-  if (!verdict.ok) {
-    const trailing = verdict.trailingHeadings?.length
-      ? `\ntrailing headings: ${verdict.trailingHeadings.join(', ')}`
-      : '';
-    throw new Error(
-      `GSTACK REVIEW REPORT contract violation in ${obs.planFile}: ${verdict.reason}${trailing}\n` +
-        `--- evidence (last 2KB) ---\n${obs.evidence}`,
-    );
-  }
+export function assertReportAtBottomIfPlanWritten(obs: {
+	planFile?: string;
+	evidence: string;
+	outcome?: string;
+}): void {
+	if (!obs.planFile) return;
+	// Skip when the plan file path was detected from TTY output but no file
+	// exists on disk. This happens when the model mentions a path mid-stream
+	// (e.g., as a tool-call argument that was interrupted, or in a draft that
+	// was never persisted). The report-at-bottom contract is for fully-written
+	// plan files; ENOENT means there's no file content to enforce against.
+	if (!fs.existsSync(obs.planFile)) return;
+	// Skip on 'asked' outcomes — these are smoke tests that exited at the
+	// first AUQ render (Step 0 only). The model never reached the workflow's
+	// report-writing step, so a partial plan file without the report section
+	// is the expected mid-flight state, not a contract violation. The
+	// report-at-bottom check applies to outcomes that imply the workflow
+	// ran end-to-end (plan_ready, completion_summary, etc.).
+	if (obs.outcome === "asked") return;
+	const content = fs.readFileSync(obs.planFile, "utf-8");
+	const verdict = assertReviewReportAtBottom(content);
+	if (!verdict.ok) {
+		const trailing = verdict.trailingHeadings?.length
+			? `\ntrailing headings: ${verdict.trailingHeadings.join(", ")}`
+			: "";
+		throw new Error(
+			`GSTACK REVIEW REPORT contract violation in ${obs.planFile}: ${verdict.reason}${trailing}\n` +
+				`--- evidence (last 2KB) ---\n${obs.evidence}`,
+		);
+	}
 }
 
 /**
@@ -1088,27 +1126,27 @@ export function assertReportAtBottomIfPlanWritten(
  * files import them directly.
  */
 export const ceoStep0Boundary: Step0BoundaryPredicate = (fp) =>
-  // Mode-pick path (Step 0F): one of HOLD SCOPE / SCOPE EXPANSION / etc.
-  fp.options.some((o) => MODE_RE.test(o.label)) ||
-  // Skip-interview path: scope-selection AUQ has "Skip interview and plan
-  // immediately" — picking it bypasses the rest of Step 0 and routes
-  // directly to review-phase. Boundary fires on the scope AUQ itself.
-  fp.options.some((o) => /skip\s+interview|plan\s+immediately/i.test(o.label));
+	// Mode-pick path (Step 0F): one of HOLD SCOPE / SCOPE EXPANSION / etc.
+	fp.options.some((o) => MODE_RE.test(o.label)) ||
+	// Skip-interview path: scope-selection AUQ has "Skip interview and plan
+	// immediately" — picking it bypasses the rest of Step 0 and routes
+	// directly to review-phase. Boundary fires on the scope AUQ itself.
+	fp.options.some((o) => /skip\s+interview|plan\s+immediately/i.test(o.label));
 
 export const engStep0Boundary: Step0BoundaryPredicate = (fp) =>
-  /scope reduction recommendation|cross[\s-]?project learnings/i.test(
-    fp.promptSnippet,
-  );
+	/scope reduction recommendation|cross[\s-]?project learnings/i.test(
+		fp.promptSnippet,
+	);
 
 export const designStep0Boundary: Step0BoundaryPredicate = (fp) =>
-  /design system|design posture|design score|first dimension/i.test(
-    fp.promptSnippet,
-  );
+	/design system|design posture|design score|first dimension/i.test(
+		fp.promptSnippet,
+	);
 
 export const devexStep0Boundary: Step0BoundaryPredicate = (fp) =>
-  /developer persona|target persona|persona selection|TTHW target/i.test(
-    fp.promptSnippet,
-  );
+	/developer persona|target persona|persona selection|TTHW target/i.test(
+		fp.promptSnippet,
+	);
 
 /**
  * Spawn `claude --permission-mode plan` in a real PTY and return a session
@@ -1119,196 +1157,206 @@ export const devexStep0Boundary: Step0BoundaryPredicate = (fp) =>
  * during the boot window). Tests should NOT have to handle it themselves.
  */
 export async function launchClaudePty(
-  opts: ClaudePtyOptions = {},
+	opts: ClaudePtyOptions = {},
 ): Promise<ClaudePtySession> {
-  const claudePath = resolveClaudeBinary();
-  if (!claudePath) {
-    throw new Error(
-      'claude binary not found on PATH. Install: https://docs.anthropic.com/en/docs/claude-code',
-    );
-  }
+	const claudePath = resolveClaudeBinary();
+	if (!claudePath) {
+		throw new Error(
+			"claude binary not found on PATH. Install: https://docs.anthropic.com/en/docs/claude-code",
+		);
+	}
 
-  const cwd = opts.cwd ?? process.cwd();
-  const cols = opts.cols ?? 120;
-  const rows = opts.rows ?? 40;
-  const timeoutMs = opts.timeoutMs ?? 240_000;
+	const cwd = opts.cwd ?? process.cwd();
+	const cols = opts.cols ?? 120;
+	const rows = opts.rows ?? 40;
+	const timeoutMs = opts.timeoutMs ?? 240_000;
 
-  let buffer = '';
-  let exited = false;
-  let exitCodeCaptured: number | null = null;
+	let buffer = "";
+	let exited = false;
+	let exitCodeCaptured: number | null = null;
 
-  // Permission mode: 'plan' default, null => omit flag entirely.
-  const permissionMode = opts.permissionMode === undefined ? 'plan' : opts.permissionMode;
-  const args: string[] = [];
-  if (permissionMode !== null) {
-    args.push('--permission-mode', permissionMode);
-  }
-  if (opts.extraArgs) args.push(...opts.extraArgs);
+	// Permission mode: 'plan' default, null => omit flag entirely.
+	const permissionMode =
+		opts.permissionMode === undefined ? "plan" : opts.permissionMode;
+	const args: string[] = [];
+	if (permissionMode !== null) {
+		args.push("--permission-mode", permissionMode);
+	}
+	if (opts.extraArgs) args.push(...opts.extraArgs);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const proc = (Bun as any).spawn([claudePath, ...args], {
-    terminal: {
-      cols,
-      rows,
-      data(_t: unknown, chunk: Buffer) {
-        buffer += chunk.toString('utf-8');
-      },
-    },
-    cwd,
-    env: { ...process.env, ...(opts.env ?? {}) },
-  });
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const proc = (Bun as any).spawn([claudePath, ...args], {
+		terminal: {
+			cols,
+			rows,
+			data(_t: unknown, chunk: Buffer) {
+				buffer += chunk.toString("utf-8");
+			},
+		},
+		cwd,
+		env: { ...process.env, ...(opts.env ?? {}) },
+	});
 
-  // Track exit so waitForAny can fail fast if claude crashes.
-  let exitedPromise: Promise<void> = Promise.resolve();
-  if (proc.exited && typeof proc.exited.then === 'function') {
-    exitedPromise = proc.exited
-      .then((code: number | null) => {
-        exitCodeCaptured = code;
-        exited = true;
-      })
-      .catch(() => {
-        exited = true;
-      });
-  }
+	// Track exit so waitForAny can fail fast if claude crashes.
+	let exitedPromise: Promise<void> = Promise.resolve();
+	if (proc.exited && typeof proc.exited.then === "function") {
+		exitedPromise = proc.exited
+			.then((code: number | null) => {
+				exitCodeCaptured = code;
+				exited = true;
+			})
+			.catch(() => {
+				exited = true;
+			});
+	}
 
-  // Top-level timeout. If a test forgets to close, this kills it eventually.
-  const wallTimer = setTimeout(() => {
-    try {
-      proc.kill?.('SIGKILL');
-    } catch {
-      /* ignore */
-    }
-  }, timeoutMs);
+	// Top-level timeout. If a test forgets to close, this kills it eventually.
+	const wallTimer = setTimeout(() => {
+		try {
+			proc.kill?.("SIGKILL");
+		} catch {
+			/* ignore */
+		}
+	}, timeoutMs);
 
-  // Auto-handle the workspace-trust dialog. Runs once during the boot
-  // window; idempotent (only fires if the phrase is still on screen).
-  let trustHandled = false;
-  const trustWatcher = setInterval(() => {
-    if (trustHandled || exited) return;
-    const visible = stripAnsi(buffer);
-    if (isTrustDialogVisible(visible)) {
-      trustHandled = true;
-      try {
-        proc.terminal?.write?.('1\r');
-      } catch {
-        /* ignore */
-      }
-    }
-  }, 200);
-  // Stop the watcher after 15s — by then the dialog has either fired or
-  // doesn't exist on this run.
-  const trustWatcherStop = setTimeout(() => clearInterval(trustWatcher), 15_000);
+	// Auto-handle the workspace-trust dialog. Runs once during the boot
+	// window; idempotent (only fires if the phrase is still on screen).
+	let trustHandled = false;
+	const trustWatcher = setInterval(() => {
+		if (trustHandled || exited) return;
+		const visible = stripAnsi(buffer);
+		if (isTrustDialogVisible(visible)) {
+			trustHandled = true;
+			try {
+				proc.terminal?.write?.("1\r");
+			} catch {
+				/* ignore */
+			}
+		}
+	}, 200);
+	// Stop the watcher after 15s — by then the dialog has either fired or
+	// doesn't exist on this run.
+	const trustWatcherStop = setTimeout(
+		() => clearInterval(trustWatcher),
+		15_000,
+	);
 
-  function send(data: string): void {
-    if (exited) return;
-    try {
-      proc.terminal?.write?.(data);
-    } catch {
-      /* ignore */
-    }
-  }
+	function send(data: string): void {
+		if (exited) return;
+		try {
+			proc.terminal?.write?.(data);
+		} catch {
+			/* ignore */
+		}
+	}
 
-  type Key = Parameters<ClaudePtySession['sendKey']>[0];
-  function sendKey(key: Key): void {
-    const map: Record<string, string> = {
-      Enter: '\r',
-      Up: '\x1b[A',
-      Down: '\x1b[B',
-      Esc: '\x1b',
-      Tab: '\t',
-      ShiftTab: '\x1b[Z',
-      CtrlC: '\x03',
-    };
-    send(map[key] ?? '');
-  }
+	type Key = Parameters<ClaudePtySession["sendKey"]>[0];
+	function sendKey(key: Key): void {
+		const map: Record<string, string> = {
+			Enter: "\r",
+			Up: "\x1b[A",
+			Down: "\x1b[B",
+			Esc: "\x1b",
+			Tab: "\t",
+			ShiftTab: "\x1b[Z",
+			CtrlC: "\x03",
+		};
+		send(map[key] ?? "");
+	}
 
-  let lastMark = 0;
-  function mark(): number {
-    lastMark = buffer.length;
-    return lastMark;
-  }
-  function visibleSince(marker?: number): string {
-    const offset = marker ?? lastMark;
-    return stripAnsi(buffer.slice(offset));
-  }
+	let lastMark = 0;
+	function mark(): number {
+		lastMark = buffer.length;
+		return lastMark;
+	}
+	function visibleSince(marker?: number): string {
+		const offset = marker ?? lastMark;
+		return stripAnsi(buffer.slice(offset));
+	}
 
-  async function waitForAny(
-    patterns: Array<RegExp | string>,
-    waitOpts?: { timeoutMs?: number; pollMs?: number; since?: number },
-  ): Promise<{ matched: RegExp | string; index: number }> {
-    const wTimeout = waitOpts?.timeoutMs ?? 60_000;
-    const poll = waitOpts?.pollMs ?? 250;
-    const since = waitOpts?.since;
-    const start = Date.now();
-    while (Date.now() - start < wTimeout) {
-      if (exited) {
-        throw new Error(
-          `claude exited (code=${exitCodeCaptured}) before any pattern matched. ` +
-            `Last visible:\n${stripAnsi(buffer).slice(-2000)}`,
-        );
-      }
-      const visible = since !== undefined ? stripAnsi(buffer.slice(since)) : stripAnsi(buffer);
-      for (let i = 0; i < patterns.length; i++) {
-        const p = patterns[i]!;
-        const matchIdx = typeof p === 'string' ? visible.indexOf(p) : visible.search(p);
-        if (matchIdx >= 0) {
-          return { matched: p, index: matchIdx };
-        }
-      }
-      await Bun.sleep(poll);
-    }
-    throw new Error(
-      `Timed out after ${wTimeout}ms waiting for any of: ${patterns
-        .map((p) => (typeof p === 'string' ? JSON.stringify(p) : p.source))
-        .join(', ')}\nLast visible (since=${since ?? 'all'}):\n${
-        since !== undefined ? stripAnsi(buffer.slice(since)).slice(-2000) : stripAnsi(buffer).slice(-2000)
-      }`,
-    );
-  }
+	async function waitForAny(
+		patterns: Array<RegExp | string>,
+		waitOpts?: { timeoutMs?: number; pollMs?: number; since?: number },
+	): Promise<{ matched: RegExp | string; index: number }> {
+		const wTimeout = waitOpts?.timeoutMs ?? 60_000;
+		const poll = waitOpts?.pollMs ?? 250;
+		const since = waitOpts?.since;
+		const start = Date.now();
+		while (Date.now() - start < wTimeout) {
+			if (exited) {
+				throw new Error(
+					`claude exited (code=${exitCodeCaptured}) before any pattern matched. ` +
+						`Last visible:\n${stripAnsi(buffer).slice(-2000)}`,
+				);
+			}
+			const visible =
+				since !== undefined
+					? stripAnsi(buffer.slice(since))
+					: stripAnsi(buffer);
+			for (let i = 0; i < patterns.length; i++) {
+				const p = patterns[i]!;
+				const matchIdx =
+					typeof p === "string" ? visible.indexOf(p) : visible.search(p);
+				if (matchIdx >= 0) {
+					return { matched: p, index: matchIdx };
+				}
+			}
+			await Bun.sleep(poll);
+		}
+		throw new Error(
+			`Timed out after ${wTimeout}ms waiting for any of: ${patterns
+				.map((p) => (typeof p === "string" ? JSON.stringify(p) : p.source))
+				.join(", ")}\nLast visible (since=${since ?? "all"}):\n${
+				since !== undefined
+					? stripAnsi(buffer.slice(since)).slice(-2000)
+					: stripAnsi(buffer).slice(-2000)
+			}`,
+		);
+	}
 
-  async function waitFor(
-    pattern: RegExp | string,
-    waitOpts?: { timeoutMs?: number; pollMs?: number; since?: number },
-  ): Promise<void> {
-    await waitForAny([pattern], waitOpts);
-  }
+	async function waitFor(
+		pattern: RegExp | string,
+		waitOpts?: { timeoutMs?: number; pollMs?: number; since?: number },
+	): Promise<void> {
+		await waitForAny([pattern], waitOpts);
+	}
 
-  async function close(): Promise<void> {
-    clearTimeout(wallTimer);
-    clearTimeout(trustWatcherStop);
-    clearInterval(trustWatcher);
-    if (exited) return;
-    try {
-      proc.kill?.('SIGINT');
-    } catch {
-      /* ignore */
-    }
-    // Wait up to 2s for graceful exit.
-    await Promise.race([exitedPromise, Bun.sleep(2000)]);
-    if (!exited) {
-      try {
-        proc.kill?.('SIGKILL');
-      } catch {
-        /* ignore */
-      }
-      await Promise.race([exitedPromise, Bun.sleep(1000)]);
-    }
-  }
+	async function close(): Promise<void> {
+		clearTimeout(wallTimer);
+		clearTimeout(trustWatcherStop);
+		clearInterval(trustWatcher);
+		if (exited) return;
+		try {
+			proc.kill?.("SIGINT");
+		} catch {
+			/* ignore */
+		}
+		// Wait up to 2s for graceful exit.
+		await Promise.race([exitedPromise, Bun.sleep(2000)]);
+		if (!exited) {
+			try {
+				proc.kill?.("SIGKILL");
+			} catch {
+				/* ignore */
+			}
+			await Promise.race([exitedPromise, Bun.sleep(1000)]);
+		}
+	}
 
-  return {
-    send,
-    sendKey,
-    rawOutput: () => buffer,
-    visibleText: () => stripAnsi(buffer),
-    mark,
-    visibleSince,
-    waitForAny,
-    waitFor,
-    pid: () => proc.pid as number | undefined,
-    exited: () => exited,
-    exitCode: () => exitCodeCaptured,
-    close,
-  };
+	return {
+		send,
+		sendKey,
+		rawOutput: () => buffer,
+		visibleText: () => stripAnsi(buffer),
+		mark,
+		visibleSince,
+		waitForAny,
+		waitFor,
+		pid: () => proc.pid as number | undefined,
+		exited: () => exited,
+		exitCode: () => exitCodeCaptured,
+		close,
+	};
 }
 
 /**
@@ -1330,37 +1378,41 @@ export async function launchClaudePty(
  * await session.close();
  */
 export async function invokeAndObserve(
-  session: ClaudePtySession,
-  slashCommand: string,
-  expectations: Record<string, RegExp | string>,
-  opts?: { boot_grace_ms?: number; timeoutMs?: number },
-): Promise<{ matched: string; rawPattern: RegExp | string; visibleAtMatch: string }> {
-  // Brief grace period so the trust-dialog auto-press has time to clear and
-  // claude is back at the input prompt before we type the command.
-  const boot = opts?.boot_grace_ms ?? 6000;
-  await Bun.sleep(boot);
+	session: ClaudePtySession,
+	slashCommand: string,
+	expectations: Record<string, RegExp | string>,
+	opts?: { boot_grace_ms?: number; timeoutMs?: number },
+): Promise<{
+	matched: string;
+	rawPattern: RegExp | string;
+	visibleAtMatch: string;
+}> {
+	// Brief grace period so the trust-dialog auto-press has time to clear and
+	// claude is back at the input prompt before we type the command.
+	const boot = opts?.boot_grace_ms ?? 6000;
+	await Bun.sleep(boot);
 
-  // Mark buffer position. All pattern matching scopes to text AFTER this point,
-  // so the trust-dialog residue and boot banner numbered options don't cause
-  // false positives.
-  const sinceMark = session.mark();
+	// Mark buffer position. All pattern matching scopes to text AFTER this point,
+	// so the trust-dialog residue and boot banner numbered options don't cause
+	// false positives.
+	const sinceMark = session.mark();
 
-  // Type and submit.
-  session.send(slashCommand + '\r');
+	// Type and submit.
+	session.send(slashCommand + "\r");
 
-  const patterns = Object.entries(expectations);
-  const result = await session.waitForAny(
-    patterns.map(([, p]) => p),
-    { timeoutMs: opts?.timeoutMs ?? 240_000, since: sinceMark },
-  );
-  // Map back to the named key.
-  const idx = patterns.findIndex(([, p]) => p === result.matched);
-  const [name, rawPattern] = patterns[idx]!;
-  return {
-    matched: name,
-    rawPattern,
-    visibleAtMatch: session.visibleText(),
-  };
+	const patterns = Object.entries(expectations);
+	const result = await session.waitForAny(
+		patterns.map(([, p]) => p),
+		{ timeoutMs: opts?.timeoutMs ?? 240_000, since: sinceMark },
+	);
+	// Map back to the named key.
+	const idx = patterns.findIndex(([, p]) => p === result.matched);
+	const [name, rawPattern] = patterns[idx]!;
+	return {
+		matched: name,
+		rawPattern,
+		visibleAtMatch: session.visibleText(),
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -1368,61 +1420,67 @@ export async function invokeAndObserve(
 // ---------------------------------------------------------------------------
 
 export interface PlanSkillObservation {
-  /**
-   * What happened first. One of:
-   *  - 'asked'        — skill emitted a numbered-option prompt (its Step 0
-   *                     AskUserQuestion or the routing-injection prompt)
-   *  - 'auto_decided' — visible TTY shows "Auto-decided ... → ..." (the
-   *                     AUTO_DECIDE preamble template fired). Distinguishes
-   *                     "the regression we're tracking" (auto-mode silently
-   *                     auto-deciding questions the user wanted to see) from
-   *                     "skill legitimately reached plan_ready". Detected
-   *                     before plan_ready/silent_write so the auto-decide
-   *                     evidence wins when both are present.
-   *  - 'plan_ready'   — claude wrote a plan and emitted its native
-   *                     "Ready to execute" confirmation
-   *  - 'silent_write' — a Write/Edit landed BEFORE any prompt, to a path
-   *                     outside the sanctioned plan/project directories
-   *  - 'exited'       — claude process died before any of the above
-   *  - 'timeout'      — none of the above within budget
-   */
-  outcome: 'asked' | 'auto_decided' | 'plan_ready' | 'silent_write' | 'exited' | 'timeout';
-  /** Human-readable summary. */
-  summary: string;
-  /** Visible terminal text since the slash command was sent (last 2KB). */
-  evidence: string;
-  /** Wall time (ms) until the outcome was decided. */
-  elapsedMs: number;
-  /**
-   * Path to the plan file the skill wrote (if outcome is 'plan_ready').
-   * Extracted from the visible TTY via {@link extractPlanFilePath}. Lets the
-   * v1.22 AskUserQuestion-blocked regression tests verify the plan file
-   * contains a `## Decisions to confirm` section under --disallowedTools —
-   * a model that silently skips Step 0 reaches plan_ready WITHOUT writing
-   * the section, and that's the regression we want to catch.
-   */
-  planFile?: string;
-  /**
-   * High-water-mark flag: did the polling loop ever observe a
-   * prose-rendered AskUserQuestion (lettered or numbered options visible)
-   * during the run? Set true the first poll iteration that
-   * isProseAUQVisible returns true on the recent buffer; remains true
-   * for the rest of the observation.
-   *
-   * The 2KB `evidence` window often misses the prose-AUQ moment because
-   * by the time outcome=plan_ready fires, the ExitPlanMode "Ready to
-   * execute" UI has pushed the options out of the tail. Tests that need
-   * to assert "the user saw the question at SOME point" should check
-   * this flag rather than re-running isProseAUQVisible on the truncated
-   * evidence.
-   */
-  proseAUQEverObserved?: boolean;
-  /**
-   * High-water-mark flag: did the LLM judge ever return state='waiting'
-   * during the run? Same shape as proseAUQEverObserved but driven by the
-   * Haiku judge fallback rather than the regex detector.
-   */
-  waitingEverObserved?: boolean;
+	/**
+	 * What happened first. One of:
+	 *  - 'asked'        — skill emitted a numbered-option prompt (its Step 0
+	 *                     AskUserQuestion or the routing-injection prompt)
+	 *  - 'auto_decided' — visible TTY shows "Auto-decided ... → ..." (the
+	 *                     AUTO_DECIDE preamble template fired). Distinguishes
+	 *                     "the regression we're tracking" (auto-mode silently
+	 *                     auto-deciding questions the user wanted to see) from
+	 *                     "skill legitimately reached plan_ready". Detected
+	 *                     before plan_ready/silent_write so the auto-decide
+	 *                     evidence wins when both are present.
+	 *  - 'plan_ready'   — claude wrote a plan and emitted its native
+	 *                     "Ready to execute" confirmation
+	 *  - 'silent_write' — a Write/Edit landed BEFORE any prompt, to a path
+	 *                     outside the sanctioned plan/project directories
+	 *  - 'exited'       — claude process died before any of the above
+	 *  - 'timeout'      — none of the above within budget
+	 */
+	outcome:
+		| "asked"
+		| "auto_decided"
+		| "plan_ready"
+		| "silent_write"
+		| "exited"
+		| "timeout";
+	/** Human-readable summary. */
+	summary: string;
+	/** Visible terminal text since the slash command was sent (last 2KB). */
+	evidence: string;
+	/** Wall time (ms) until the outcome was decided. */
+	elapsedMs: number;
+	/**
+	 * Path to the plan file the skill wrote (if outcome is 'plan_ready').
+	 * Extracted from the visible TTY via {@link extractPlanFilePath}. Lets the
+	 * v1.22 AskUserQuestion-blocked regression tests verify the plan file
+	 * contains a `## Decisions to confirm` section under --disallowedTools —
+	 * a model that silently skips Step 0 reaches plan_ready WITHOUT writing
+	 * the section, and that's the regression we want to catch.
+	 */
+	planFile?: string;
+	/**
+	 * High-water-mark flag: did the polling loop ever observe a
+	 * prose-rendered AskUserQuestion (lettered or numbered options visible)
+	 * during the run? Set true the first poll iteration that
+	 * isProseAUQVisible returns true on the recent buffer; remains true
+	 * for the rest of the observation.
+	 *
+	 * The 2KB `evidence` window often misses the prose-AUQ moment because
+	 * by the time outcome=plan_ready fires, the ExitPlanMode "Ready to
+	 * execute" UI has pushed the options out of the tail. Tests that need
+	 * to assert "the user saw the question at SOME point" should check
+	 * this flag rather than re-running isProseAUQVisible on the truncated
+	 * evidence.
+	 */
+	proseAUQEverObserved?: boolean;
+	/**
+	 * High-water-mark flag: did the LLM judge ever return state='waiting'
+	 * during the run? Same shape as proseAUQEverObserved but driven by the
+	 * Haiku judge fallback rather than the regex detector.
+	 */
+	waitingEverObserved?: boolean;
 }
 
 /**
@@ -1443,199 +1501,206 @@ export interface PlanSkillObservation {
  * counted zero questions.
  */
 export async function runPlanSkillObservation(opts: {
-  /** Skill name, e.g. 'plan-ceo-review'. */
-  skillName: string;
-  /** Whether to launch in plan mode. Default true. The no-op regression
-   *  test sets this false to verify skills work outside plan mode. */
-  inPlanMode?: boolean;
-  /** Working directory. Default process.cwd(). */
-  cwd?: string;
-  /** Total budget for skill to reach a terminal outcome. Default 180000. */
-  timeoutMs?: number;
-  /** Extra CLI args appended after --permission-mode. Used by the v1.22+
-   *  AskUserQuestion-blocked regression tests to pass
-   *  `['--disallowedTools', 'AskUserQuestion']` (the flag set Conductor
-   *  uses to remove native AskUserQuestion in favor of its MCP variant).
-   *  Plumbs straight through to launchClaudePty. */
-  extraArgs?: string[];
-  /**
-   * Extra env merged into the spawned `claude` process. `launchClaudePty`
-   * already supports this; exposing it here lets per-skill tests isolate
-   * from local config that would mask the regression they're trying to
-   * catch (e.g., `QUESTION_TUNING=true` causing AUTO_DECIDE to skip the
-   * rendered AskUserQuestion list).
-   */
-  env?: Record<string, string>;
-  /**
-   * Seed an initial plan that the spawned `claude` process operates on.
-   * STOP-gate regression tests need a plan with guaranteed-finding-triggering
-   * complexity (8+ files, custom-vs-builtin smell) so the skill MUST emit
-   * AskUserQuestion or fall back to a Decisions section. Without this,
-   * plan-mode creates a fresh empty plan and the skill has nothing to find
-   * issues with.
-   *
-   * Implementation: claude has no `--plan-file` flag (verified via
-   * `claude --help`). We pre-pump a user message containing the draft
-   * plan, wait for it to register, then invoke the skill. The skill's
-   * Step 0 reads the prior conversation context so it sees the draft.
-   */
-  initialPlanContent?: string;
+	/** Skill name, e.g. 'plan-ceo-review'. */
+	skillName: string;
+	/** Whether to launch in plan mode. Default true. The no-op regression
+	 *  test sets this false to verify skills work outside plan mode. */
+	inPlanMode?: boolean;
+	/** Working directory. Default process.cwd(). */
+	cwd?: string;
+	/** Total budget for skill to reach a terminal outcome. Default 180000. */
+	timeoutMs?: number;
+	/** Extra CLI args appended after --permission-mode. Used by the v1.22+
+	 *  AskUserQuestion-blocked regression tests to pass
+	 *  `['--disallowedTools', 'AskUserQuestion']` (the flag set Conductor
+	 *  uses to remove native AskUserQuestion in favor of its MCP variant).
+	 *  Plumbs straight through to launchClaudePty. */
+	extraArgs?: string[];
+	/**
+	 * Extra env merged into the spawned `claude` process. `launchClaudePty`
+	 * already supports this; exposing it here lets per-skill tests isolate
+	 * from local config that would mask the regression they're trying to
+	 * catch (e.g., `QUESTION_TUNING=true` causing AUTO_DECIDE to skip the
+	 * rendered AskUserQuestion list).
+	 */
+	env?: Record<string, string>;
+	/**
+	 * Seed an initial plan that the spawned `claude` process operates on.
+	 * STOP-gate regression tests need a plan with guaranteed-finding-triggering
+	 * complexity (8+ files, custom-vs-builtin smell) so the skill MUST emit
+	 * AskUserQuestion or fall back to a Decisions section. Without this,
+	 * plan-mode creates a fresh empty plan and the skill has nothing to find
+	 * issues with.
+	 *
+	 * Implementation: claude has no `--plan-file` flag (verified via
+	 * `claude --help`). We pre-pump a user message containing the draft
+	 * plan, wait for it to register, then invoke the skill. The skill's
+	 * Step 0 reads the prior conversation context so it sees the draft.
+	 */
+	initialPlanContent?: string;
 }): Promise<PlanSkillObservation> {
-  const startedAt = Date.now();
-  const session = await launchClaudePty({
-    permissionMode: opts.inPlanMode === false ? null : 'plan',
-    cwd: opts.cwd,
-    timeoutMs: (opts.timeoutMs ?? 180_000) + 30_000,
-    extraArgs: opts.extraArgs,
-    env: opts.env,
-  });
+	const startedAt = Date.now();
+	const session = await launchClaudePty({
+		permissionMode: opts.inPlanMode === false ? null : "plan",
+		cwd: opts.cwd,
+		timeoutMs: (opts.timeoutMs ?? 180_000) + 30_000,
+		extraArgs: opts.extraArgs,
+		env: opts.env,
+	});
 
-  try {
-    // Boot grace + trust-dialog auto-handle.
-    await Bun.sleep(8000);
-    if (opts.initialPlanContent) {
-      // Pre-pump the draft as a user message so the skill's Step 0 has
-      // concrete content to scope-challenge. The trailing `\r` submits
-      // the message; embedded `\n` are preserved as line breaks within
-      // the message (claude-code uses Enter to send, Shift+Enter for
-      // newlines, but raw `\r` from a PTY just submits whatever's in
-      // the input buffer).
-      const seed = `Please review the following draft plan when I run the skill below:\n\n${opts.initialPlanContent}`;
-      session.send(`${seed}\r`);
-      // Wait for the seed message to render before sending the skill
-      // command. Without this gap the two messages can fuse and the
-      // skill name becomes part of the user prompt instead of a slash
-      // command.
-      await Bun.sleep(3000);
-    }
-    const since = session.mark();
-    session.send(`/${opts.skillName}\r`);
+	try {
+		// Boot grace + trust-dialog auto-handle.
+		await Bun.sleep(8000);
+		if (opts.initialPlanContent) {
+			// Pre-pump the draft as a user message so the skill's Step 0 has
+			// concrete content to scope-challenge. The trailing `\r` submits
+			// the message; embedded `\n` are preserved as line breaks within
+			// the message (claude-code uses Enter to send, Shift+Enter for
+			// newlines, but raw `\r` from a PTY just submits whatever's in
+			// the input buffer).
+			const seed = `Please review the following draft plan when I run the skill below:\n\n${opts.initialPlanContent}`;
+			session.send(`${seed}\r`);
+			// Wait for the seed message to render before sending the skill
+			// command. Without this gap the two messages can fuse and the
+			// skill name becomes part of the user prompt instead of a slash
+			// command.
+			await Bun.sleep(3000);
+		}
+		const since = session.mark();
+		session.send(`/${opts.skillName}\r`);
 
-    const budgetMs = opts.timeoutMs ?? 180_000;
-    const start = Date.now();
-    let lastJudgeAt = 0;
-    let lastJudgeVerdict: PtyStateVerdict | null = null;
-    // High-water marks: did we EVER see a prose-AUQ surface or a judge
-    // 'waiting' verdict during the run? Models may surface options
-    // briefly, then resume thinking when no user response comes (test
-    // env has no responder). At timeout we trust historical signals
-    // even if the current state is 'working'.
-    let proseAUQEverObserved = false;
-    let waitingEverObserved = false;
-    const JUDGE_AFTER_MS = 60_000;
-    const JUDGE_INTERVAL_MS = 30_000;
-    while (Date.now() - start < budgetMs) {
-      await Bun.sleep(2000);
-      const visible = session.visibleSince(since);
+		const budgetMs = opts.timeoutMs ?? 180_000;
+		const start = Date.now();
+		let lastJudgeAt = 0;
+		let lastJudgeVerdict: PtyStateVerdict | null = null;
+		// High-water marks: did we EVER see a prose-AUQ surface or a judge
+		// 'waiting' verdict during the run? Models may surface options
+		// briefly, then resume thinking when no user response comes (test
+		// env has no responder). At timeout we trust historical signals
+		// even if the current state is 'working'.
+		let proseAUQEverObserved = false;
+		let waitingEverObserved = false;
+		const JUDGE_AFTER_MS = 60_000;
+		const JUDGE_INTERVAL_MS = 30_000;
+		while (Date.now() - start < budgetMs) {
+			await Bun.sleep(2000);
+			const visible = session.visibleSince(since);
 
-      if (session.exited()) {
-        return {
-          outcome: 'exited',
-          summary: `claude exited (code=${session.exitCode()}) before reaching a terminal outcome`,
-          evidence: visible.slice(-2000),
-          elapsedMs: Date.now() - startedAt,
-        };
-      }
-      if (visible.includes('Unknown command:')) {
-        return {
-          outcome: 'exited',
-          summary: `claude rejected /${opts.skillName} as unknown command (skill not registered in this cwd)`,
-          evidence: visible.slice(-2000),
-          elapsedMs: Date.now() - startedAt,
-        };
-      }
+			if (session.exited()) {
+				return {
+					outcome: "exited",
+					summary: `claude exited (code=${session.exitCode()}) before reaching a terminal outcome`,
+					evidence: visible.slice(-2000),
+					elapsedMs: Date.now() - startedAt,
+				};
+			}
+			if (visible.includes("Unknown command:")) {
+				return {
+					outcome: "exited",
+					summary: `claude rejected /${opts.skillName} as unknown command (skill not registered in this cwd)`,
+					evidence: visible.slice(-2000),
+					elapsedMs: Date.now() - startedAt,
+				};
+			}
 
-      // Cheap surface-tracking: did the model ever surface a prose AUQ in
-      // this tick's recent buffer? Track once-true (high water).
-      if (!proseAUQEverObserved && isProseAUQVisible(visible)) {
-        proseAUQEverObserved = true;
-        logPtySnapshot(visible, {
-          testName: opts.skillName,
-          elapsedMs: Date.now() - start,
-          tag: 'prose-auq-surfaced',
-        });
-      }
+			// Cheap surface-tracking: did the model ever surface a prose AUQ in
+			// this tick's recent buffer? Track once-true (high water).
+			if (!proseAUQEverObserved && isProseAUQVisible(visible)) {
+				proseAUQEverObserved = true;
+				logPtySnapshot(visible, {
+					testName: opts.skillName,
+					elapsedMs: Date.now() - start,
+					tag: "prose-auq-surfaced",
+				});
+			}
 
-      const classified = classifyVisible(visible, {
-        strictPlanWrites: !!opts.initialPlanContent,
-      });
-      if (classified) {
-        const obs: PlanSkillObservation = {
-          ...classified,
-          evidence: visible.slice(-2000),
-          elapsedMs: Date.now() - startedAt,
-          proseAUQEverObserved,
-          waitingEverObserved,
-        };
-        // Capture the plan file path on any outcome where one may have been
-        // written. Gating only on 'plan_ready' missed two cases: (1) the
-        // 'asked' outcome where the model wrote a plan partway through then
-        // paused on a question, and (2) 'wrote_findings_before_asking' where
-        // the bug is precisely that the plan was written. The
-        // assertReviewReportAtBottom checks downstream gate on planFile
-        // existing, not on the outcome.
-        const planFile = extractPlanFilePath(visible);
-        if (planFile) obs.planFile = planFile;
-        return obs;
-      }
+			const classified = classifyVisible(visible, {
+				strictPlanWrites: !!opts.initialPlanContent,
+			});
+			if (classified) {
+				const obs: PlanSkillObservation = {
+					...classified,
+					evidence: visible.slice(-2000),
+					elapsedMs: Date.now() - startedAt,
+					proseAUQEverObserved,
+					waitingEverObserved,
+				};
+				// Capture the plan file path on any outcome where one may have been
+				// written. Gating only on 'plan_ready' missed two cases: (1) the
+				// 'asked' outcome where the model wrote a plan partway through then
+				// paused on a question, and (2) 'wrote_findings_before_asking' where
+				// the bug is precisely that the plan was written. The
+				// assertReviewReportAtBottom checks downstream gate on planFile
+				// existing, not on the outcome.
+				const planFile = extractPlanFilePath(visible);
+				if (planFile) obs.planFile = planFile;
+				return obs;
+			}
 
-      // LLM judge fallback: if regex detectors didn't classify and we've
-      // burned >60s with periodic ticks, ask Haiku "is the model waiting,
-      // working, or hung?" Treat 'waiting' as 'asked' (model surfaced a
-      // question via prose the regex couldn't reassemble). Snapshot the
-      // visible buffer at each judge call when GSTACK_PTY_LOG=1.
-      const elapsed = Date.now() - start;
-      if (elapsed > JUDGE_AFTER_MS && Date.now() - lastJudgeAt > JUDGE_INTERVAL_MS) {
-        lastJudgeAt = Date.now();
-        logPtySnapshot(visible, { testName: opts.skillName, elapsedMs: elapsed, tag: 'judge-tick' });
-        lastJudgeVerdict = judgePtyState(visible, { testName: opts.skillName });
-        if (lastJudgeVerdict.state === 'waiting') {
-          waitingEverObserved = true;
-          return {
-            outcome: 'asked',
-            summary: `LLM judge: ${lastJudgeVerdict.reasoning} (state=waiting after ${Math.round(elapsed / 1000)}s)`,
-            evidence: visible.slice(-2000),
-            elapsedMs: Date.now() - startedAt,
-          };
-        }
-      }
-    }
+			// LLM judge fallback: if regex detectors didn't classify and we've
+			// burned >60s with periodic ticks, ask Haiku "is the model waiting,
+			// working, or hung?" Treat 'waiting' as 'asked' (model surfaced a
+			// question via prose the regex couldn't reassemble). Snapshot the
+			// visible buffer at each judge call when GSTACK_PTY_LOG=1.
+			const elapsed = Date.now() - start;
+			if (
+				elapsed > JUDGE_AFTER_MS &&
+				Date.now() - lastJudgeAt > JUDGE_INTERVAL_MS
+			) {
+				lastJudgeAt = Date.now();
+				logPtySnapshot(visible, {
+					testName: opts.skillName,
+					elapsedMs: elapsed,
+					tag: "judge-tick",
+				});
+				lastJudgeVerdict = judgePtyState(visible, { testName: opts.skillName });
+				if (lastJudgeVerdict.state === "waiting") {
+					waitingEverObserved = true;
+					return {
+						outcome: "asked",
+						summary: `LLM judge: ${lastJudgeVerdict.reasoning} (state=waiting after ${Math.round(elapsed / 1000)}s)`,
+						evidence: visible.slice(-2000),
+						elapsedMs: Date.now() - startedAt,
+					};
+				}
+			}
+		}
 
-    // Timeout fallback: if we observed a prose-AUQ surface OR a judge
-    // 'waiting' verdict at any point during the run, treat as 'asked'.
-    // This catches the model-surfaced-then-resumed-thinking case where
-    // by the time the timeout fires, the buffer has moved past the
-    // options into spinner state but the question DID surface earlier.
-    const finalVisible = session.visibleSince(since);
-    if (proseAUQEverObserved || waitingEverObserved) {
-      return {
-        outcome: 'asked',
-        summary:
-          `prose-AUQ surface observed during run (proseAUQEverObserved=${proseAUQEverObserved}, waitingEverObserved=${waitingEverObserved}); model surfaced the question and the test budget elapsed without a follow-up classification` +
-          (lastJudgeVerdict
-            ? ` (last LLM judge: ${lastJudgeVerdict.state} — ${lastJudgeVerdict.reasoning})`
-            : ''),
-        evidence: finalVisible.slice(-2000),
-        elapsedMs: Date.now() - startedAt,
-        proseAUQEverObserved,
-        waitingEverObserved,
-      };
-    }
-    return {
-      outcome: 'timeout',
-      summary:
-        `no terminal outcome within ${budgetMs}ms` +
-        (lastJudgeVerdict
-          ? ` (last LLM judge: state=${lastJudgeVerdict.state} — ${lastJudgeVerdict.reasoning})`
-          : ''),
-      evidence: finalVisible.slice(-2000),
-      elapsedMs: Date.now() - startedAt,
-      proseAUQEverObserved,
-      waitingEverObserved,
-    };
-  } finally {
-    await session.close();
-  }
+		// Timeout fallback: if we observed a prose-AUQ surface OR a judge
+		// 'waiting' verdict at any point during the run, treat as 'asked'.
+		// This catches the model-surfaced-then-resumed-thinking case where
+		// by the time the timeout fires, the buffer has moved past the
+		// options into spinner state but the question DID surface earlier.
+		const finalVisible = session.visibleSince(since);
+		if (proseAUQEverObserved || waitingEverObserved) {
+			return {
+				outcome: "asked",
+				summary:
+					`prose-AUQ surface observed during run (proseAUQEverObserved=${proseAUQEverObserved}, waitingEverObserved=${waitingEverObserved}); model surfaced the question and the test budget elapsed without a follow-up classification` +
+					(lastJudgeVerdict
+						? ` (last LLM judge: ${lastJudgeVerdict.state} — ${lastJudgeVerdict.reasoning})`
+						: ""),
+				evidence: finalVisible.slice(-2000),
+				elapsedMs: Date.now() - startedAt,
+				proseAUQEverObserved,
+				waitingEverObserved,
+			};
+		}
+		return {
+			outcome: "timeout",
+			summary:
+				`no terminal outcome within ${budgetMs}ms` +
+				(lastJudgeVerdict
+					? ` (last LLM judge: state=${lastJudgeVerdict.state} — ${lastJudgeVerdict.reasoning})`
+					: ""),
+			evidence: finalVisible.slice(-2000),
+			elapsedMs: Date.now() - startedAt,
+			proseAUQEverObserved,
+			waitingEverObserved,
+		};
+	} finally {
+		await session.close();
+	}
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1650,24 +1715,24 @@ export async function runPlanSkillObservation(opts: {
  * dumps when an assertion fails.
  */
 export interface PlanSkillCountObservation {
-  outcome:
-    | 'plan_ready'
-    | 'completion_summary'
-    | 'ceiling_reached'
-    | 'silent_write'
-    | 'exited'
-    | 'timeout';
-  summary: string;
-  /** Visible terminal text at terminal time (last 3KB). */
-  evidence: string;
-  /** Wall time (ms) until the outcome was decided. */
-  elapsedMs: number;
-  /** All distinct AskUserQuestions observed, in observation order. */
-  fingerprints: AskUserQuestionFingerprint[];
-  /** Count of fingerprints with `preReview === true`. */
-  step0Count: number;
-  /** Count of fingerprints with `preReview === false`. */
-  reviewCount: number;
+	outcome:
+		| "plan_ready"
+		| "completion_summary"
+		| "ceiling_reached"
+		| "silent_write"
+		| "exited"
+		| "timeout";
+	summary: string;
+	/** Visible terminal text at terminal time (last 3KB). */
+	evidence: string;
+	/** Wall time (ms) until the outcome was decided. */
+	elapsedMs: number;
+	/** All distinct AskUserQuestions observed, in observation order. */
+	fingerprints: AskUserQuestionFingerprint[];
+	/** Count of fingerprints with `preReview === true`. */
+	step0Count: number;
+	/** Count of fingerprints with `preReview === false`. */
+	reviewCount: number;
 }
 
 /**
@@ -1712,208 +1777,208 @@ export interface PlanSkillCountObservation {
  * fingerprints.
  */
 export async function runPlanSkillCounting(opts: {
-  /** Skill name, e.g. 'plan-ceo-review'. Used for diagnostic strings only. */
-  skillName: string;
-  /** Slash command to send alone, e.g. '/plan-ceo-review'. No trailing args. */
-  slashCommand: string;
-  /** Plan content sent as a follow-up message ~3s after the slash command. */
-  followUpPrompt: string;
-  /** Per-skill predicate: which answered AUQ is the last Step-0 question. */
-  isLastStep0AUQ: Step0BoundaryPredicate;
-  /** Hard cap on review-phase count; helper returns when reached. Should be
-   *  set ABOVE the test's assertion ceiling so the test sees the cap as a
-   *  failure rather than a silent stop. */
-  reviewCountCeiling: number;
-  /** Numbered option to press by default. Defaults to 1 (recommended). */
-  defaultPick?: number;
-  /**
-   * Optional override for the FIRST AUQ observed. Receives the fingerprint;
-   * returns the option index to press. Subsequent AUQs always use defaultPick.
-   *
-   * Skill-specific routing helper: /plan-ceo-review's first AUQ asks "what
-   * scope?" with options like "branch diff" / "describe inline" / "skip
-   * interview". Pressing the default 1 routes to "branch diff" (the wrong
-   * review target for a seeded fixture). firstAUQPick lets the test pick
-   * "Skip interview" or "describe inline" so the agent reviews the
-   * follow-up plan content the test sent, not the git diff.
-   */
-  firstAUQPick?: (fp: AskUserQuestionFingerprint) => number;
-  /** Working directory. Default process.cwd() (repo cwd holds skill registry). */
-  cwd?: string;
-  /** Total budget for skill to reach a terminal outcome. Default 1_500_000 (25 min). */
-  timeoutMs?: number;
-  /** Extra env merged into the spawned `claude` process. */
-  env?: Record<string, string>;
+	/** Skill name, e.g. 'plan-ceo-review'. Used for diagnostic strings only. */
+	skillName: string;
+	/** Slash command to send alone, e.g. '/plan-ceo-review'. No trailing args. */
+	slashCommand: string;
+	/** Plan content sent as a follow-up message ~3s after the slash command. */
+	followUpPrompt: string;
+	/** Per-skill predicate: which answered AUQ is the last Step-0 question. */
+	isLastStep0AUQ: Step0BoundaryPredicate;
+	/** Hard cap on review-phase count; helper returns when reached. Should be
+	 *  set ABOVE the test's assertion ceiling so the test sees the cap as a
+	 *  failure rather than a silent stop. */
+	reviewCountCeiling: number;
+	/** Numbered option to press by default. Defaults to 1 (recommended). */
+	defaultPick?: number;
+	/**
+	 * Optional override for the FIRST AUQ observed. Receives the fingerprint;
+	 * returns the option index to press. Subsequent AUQs always use defaultPick.
+	 *
+	 * Skill-specific routing helper: /plan-ceo-review's first AUQ asks "what
+	 * scope?" with options like "branch diff" / "describe inline" / "skip
+	 * interview". Pressing the default 1 routes to "branch diff" (the wrong
+	 * review target for a seeded fixture). firstAUQPick lets the test pick
+	 * "Skip interview" or "describe inline" so the agent reviews the
+	 * follow-up plan content the test sent, not the git diff.
+	 */
+	firstAUQPick?: (fp: AskUserQuestionFingerprint) => number;
+	/** Working directory. Default process.cwd() (repo cwd holds skill registry). */
+	cwd?: string;
+	/** Total budget for skill to reach a terminal outcome. Default 1_500_000 (25 min). */
+	timeoutMs?: number;
+	/** Extra env merged into the spawned `claude` process. */
+	env?: Record<string, string>;
 }): Promise<PlanSkillCountObservation> {
-  const startedAt = Date.now();
-  const defaultPick = opts.defaultPick ?? 1;
-  const timeoutMs = opts.timeoutMs ?? 1_500_000;
+	const startedAt = Date.now();
+	const defaultPick = opts.defaultPick ?? 1;
+	const timeoutMs = opts.timeoutMs ?? 1_500_000;
 
-  const session = await launchClaudePty({
-    permissionMode: 'plan',
-    cwd: opts.cwd,
-    timeoutMs: timeoutMs + 60_000,
-    env: opts.env,
-  });
+	const session = await launchClaudePty({
+		permissionMode: "plan",
+		cwd: opts.cwd,
+		timeoutMs: timeoutMs + 60_000,
+		env: opts.env,
+	});
 
-  const fingerprints: AskUserQuestionFingerprint[] = [];
-  const seen = new Set<string>();
-  let boundaryFired = false;
-  let step0Count = 0;
-  let reviewCount = 0;
-  let isFirstAUQ = true;
-  let lastSig = '';
+	const fingerprints: AskUserQuestionFingerprint[] = [];
+	const seen = new Set<string>();
+	let boundaryFired = false;
+	let step0Count = 0;
+	let reviewCount = 0;
+	let isFirstAUQ = true;
+	let lastSig = "";
 
-  function snapshot(
-    outcome: PlanSkillCountObservation['outcome'],
-    summary: string,
-    visible: string,
-  ): PlanSkillCountObservation {
-    return {
-      outcome,
-      summary,
-      evidence: visible.slice(-3000),
-      elapsedMs: Date.now() - startedAt,
-      fingerprints,
-      step0Count,
-      reviewCount,
-    };
-  }
+	function snapshot(
+		outcome: PlanSkillCountObservation["outcome"],
+		summary: string,
+		visible: string,
+	): PlanSkillCountObservation {
+		return {
+			outcome,
+			summary,
+			evidence: visible.slice(-3000),
+			elapsedMs: Date.now() - startedAt,
+			fingerprints,
+			step0Count,
+			reviewCount,
+		};
+	}
 
-  try {
-    await Bun.sleep(8000); // boot grace + auto-trust handler window
-    const since = session.mark();
-    session.send(`${opts.slashCommand}\r`);
-    await Bun.sleep(3000);
-    session.send(`${opts.followUpPrompt}\r`);
+	try {
+		await Bun.sleep(8000); // boot grace + auto-trust handler window
+		const since = session.mark();
+		session.send(`${opts.slashCommand}\r`);
+		await Bun.sleep(3000);
+		session.send(`${opts.followUpPrompt}\r`);
 
-    const budgetStart = Date.now();
-    while (Date.now() - budgetStart < timeoutMs) {
-      await Bun.sleep(2000);
-      const visible = session.visibleSince(since);
+		const budgetStart = Date.now();
+		while (Date.now() - budgetStart < timeoutMs) {
+			await Bun.sleep(2000);
+			const visible = session.visibleSince(since);
 
-      // Process exited?
-      if (session.exited()) {
-        return snapshot(
-          'exited',
-          `claude exited (code=${session.exitCode()}) during counting (step0=${step0Count}, review=${reviewCount})`,
-          visible,
-        );
-      }
-      if (visible.includes('Unknown command:')) {
-        return snapshot(
-          'exited',
-          `claude rejected ${opts.slashCommand} as unknown command (skill not registered in this cwd)`,
-          visible,
-        );
-      }
+			// Process exited?
+			if (session.exited()) {
+				return snapshot(
+					"exited",
+					`claude exited (code=${session.exitCode()}) during counting (step0=${step0Count}, review=${reviewCount})`,
+					visible,
+				);
+			}
+			if (visible.includes("Unknown command:")) {
+				return snapshot(
+					"exited",
+					`claude rejected ${opts.slashCommand} as unknown command (skill not registered in this cwd)`,
+					visible,
+				);
+			}
 
-      // Silent write detection — only fires if no numbered prompt is on
-      // screen (otherwise the write is gated by a permission/AUQ).
-      const writeRe = /⏺\s*(?:Write|Edit)\(([^)]+)\)/g;
-      let m: RegExpExecArray | null;
-      while ((m = writeRe.exec(visible)) !== null) {
-        const target = m[1] ?? '';
-        const sanctioned = SANCTIONED_WRITE_SUBSTRINGS.some((s) =>
-          target.includes(s),
-        );
-        if (!sanctioned && !isNumberedOptionListVisible(visible)) {
-          return snapshot(
-            'silent_write',
-            `Write/Edit to ${target} fired before any AskUserQuestion`,
-            visible,
-          );
-        }
-      }
+			// Silent write detection — only fires if no numbered prompt is on
+			// screen (otherwise the write is gated by a permission/AUQ).
+			const writeRe = /⏺\s*(?:Write|Edit)\(([^)]+)\)/g;
+			let m: RegExpExecArray | null;
+			while ((m = writeRe.exec(visible)) !== null) {
+				const target = m[1] ?? "";
+				const sanctioned = SANCTIONED_WRITE_SUBSTRINGS.some((s) =>
+					target.includes(s),
+				);
+				if (!sanctioned && !isNumberedOptionListVisible(visible)) {
+					return snapshot(
+						"silent_write",
+						`Write/Edit to ${target} fired before any AskUserQuestion`,
+						visible,
+					);
+				}
+			}
 
-      // Soft terminal signals — check before AUQ processing so a final
-      // completion-summary doesn't get misclassified as a bonus AUQ.
-      if (COMPLETION_SUMMARY_RE.test(visible)) {
-        return snapshot(
-          'completion_summary',
-          `skill emitted completion summary / verdict / status line (step0=${step0Count}, review=${reviewCount})`,
-          visible,
-        );
-      }
-      if (isPlanReadyVisible(visible)) {
-        return snapshot(
-          'plan_ready',
-          `skill emitted plan-mode "Ready to execute" confirmation (step0=${step0Count}, review=${reviewCount})`,
-          visible,
-        );
-      }
+			// Soft terminal signals — check before AUQ processing so a final
+			// completion-summary doesn't get misclassified as a bonus AUQ.
+			if (COMPLETION_SUMMARY_RE.test(visible)) {
+				return snapshot(
+					"completion_summary",
+					`skill emitted completion summary / verdict / status line (step0=${step0Count}, review=${reviewCount})`,
+					visible,
+				);
+			}
+			if (isPlanReadyVisible(visible)) {
+				return snapshot(
+					"plan_ready",
+					`skill emitted plan-mode "Ready to execute" confirmation (step0=${step0Count}, review=${reviewCount})`,
+					visible,
+				);
+			}
 
-      // Numbered option list?
-      if (!isNumberedOptionListVisible(visible)) continue;
+			// Numbered option list?
+			if (!isNumberedOptionListVisible(visible)) continue;
 
-      // Permission dialog? Auto-grant with defaultPick. Only act on the
-      // recent tail to avoid re-triggering on stale dialogs in scrollback.
-      if (isPermissionDialogVisible(visible.slice(-TAIL_SCAN_BYTES))) {
-        session.send(`${defaultPick}\r`);
-        await Bun.sleep(1500);
-        continue;
-      }
+			// Permission dialog? Auto-grant with defaultPick. Only act on the
+			// recent tail to avoid re-triggering on stale dialogs in scrollback.
+			if (isPermissionDialogVisible(visible.slice(-TAIL_SCAN_BYTES))) {
+				session.send(`${defaultPick}\r`);
+				await Bun.sleep(1500);
+				continue;
+			}
 
-      // Parse the active AUQ. Skip same-redraw and empty-prompt cases.
-      const options = parseNumberedOptions(visible);
-      if (options.length < 2) continue;
-      const sig = optionsSignature(options);
-      if (sig === lastSig) continue;
-      const promptSnippet = parseQuestionPrompt(visible);
-      if (promptSnippet === '') continue; // not yet rendered, poll again
-      lastSig = sig;
+			// Parse the active AUQ. Skip same-redraw and empty-prompt cases.
+			const options = parseNumberedOptions(visible);
+			if (options.length < 2) continue;
+			const sig = optionsSignature(options);
+			if (sig === lastSig) continue;
+			const promptSnippet = parseQuestionPrompt(visible);
+			if (promptSnippet === "") continue; // not yet rendered, poll again
+			lastSig = sig;
 
-      const fingerprintHash = auqFingerprint(promptSnippet, options);
-      if (seen.has(fingerprintHash)) {
-        // Same content, already counted (TTY redrew with whitespace diff).
-        continue;
-      }
-      seen.add(fingerprintHash);
+			const fingerprintHash = auqFingerprint(promptSnippet, options);
+			if (seen.has(fingerprintHash)) {
+				// Same content, already counted (TTY redrew with whitespace diff).
+				continue;
+			}
+			seen.add(fingerprintHash);
 
-      const fp: AskUserQuestionFingerprint = {
-        signature: fingerprintHash,
-        promptSnippet,
-        options,
-        observedAtMs: Date.now() - startedAt,
-        preReview: !boundaryFired,
-      };
-      fingerprints.push(fp);
-      if (boundaryFired) reviewCount += 1;
-      else step0Count += 1;
+			const fp: AskUserQuestionFingerprint = {
+				signature: fingerprintHash,
+				promptSnippet,
+				options,
+				observedAtMs: Date.now() - startedAt,
+				preReview: !boundaryFired,
+			};
+			fingerprints.push(fp);
+			if (boundaryFired) reviewCount += 1;
+			else step0Count += 1;
 
-      // Press to advance — first AUQ may use the override pick.
-      const pickIdx =
-        isFirstAUQ && opts.firstAUQPick ? opts.firstAUQPick(fp) : defaultPick;
-      isFirstAUQ = false;
-      session.send(`${pickIdx}\r`);
+			// Press to advance — first AUQ may use the override pick.
+			const pickIdx =
+				isFirstAUQ && opts.firstAUQPick ? opts.firstAUQPick(fp) : defaultPick;
+			isFirstAUQ = false;
+			session.send(`${pickIdx}\r`);
 
-      // Evaluate boundary AFTER pressing — if THIS AUQ was the last Step 0
-      // question, all subsequent AUQs go to reviewCount.
-      if (!boundaryFired && opts.isLastStep0AUQ(fp)) {
-        boundaryFired = true;
-      }
+			// Evaluate boundary AFTER pressing — if THIS AUQ was the last Step 0
+			// question, all subsequent AUQs go to reviewCount.
+			if (!boundaryFired && opts.isLastStep0AUQ(fp)) {
+				boundaryFired = true;
+			}
 
-      // Hard ceiling — runaway protection.
-      if (reviewCount >= opts.reviewCountCeiling) {
-        return snapshot(
-          'ceiling_reached',
-          `review-phase AUQ count reached ceiling (${opts.reviewCountCeiling})`,
-          session.visibleSince(since),
-        );
-      }
+			// Hard ceiling — runaway protection.
+			if (reviewCount >= opts.reviewCountCeiling) {
+				return snapshot(
+					"ceiling_reached",
+					`review-phase AUQ count reached ceiling (${opts.reviewCountCeiling})`,
+					session.visibleSince(since),
+				);
+			}
 
-      // Give the agent a beat to advance to the next state.
-      await Bun.sleep(2000);
-    }
+			// Give the agent a beat to advance to the next state.
+			await Bun.sleep(2000);
+		}
 
-    return snapshot(
-      'timeout',
-      `no terminal outcome within ${timeoutMs}ms (step0=${step0Count}, review=${reviewCount})`,
-      session.visibleSince(since),
-    );
-  } finally {
-    await session.close();
-  }
+		return snapshot(
+			"timeout",
+			`no terminal outcome within ${timeoutMs}ms (step0=${step0Count}, review=${reviewCount})`,
+			session.visibleSince(since),
+		);
+	} finally {
+		await session.close();
+	}
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1943,19 +2008,19 @@ export async function runPlanSkillCounting(opts: {
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface PlanSkillFloorObservation {
-  /** True iff a review-phase AUQ render was observed. */
-  auqObserved: boolean;
-  outcome:
-    | 'auq_observed'
-    | 'plan_ready'
-    | 'silent_write'
-    | 'exited'
-    | 'timeout';
-  summary: string;
-  /** Visible TTY tail (last 3KB) at terminal time. */
-  evidence: string;
-  /** Wall time (ms) until the outcome was decided. */
-  elapsedMs: number;
+	/** True iff a review-phase AUQ render was observed. */
+	auqObserved: boolean;
+	outcome:
+		| "auq_observed"
+		| "plan_ready"
+		| "silent_write"
+		| "exited"
+		| "timeout";
+	summary: string;
+	/** Visible TTY tail (last 3KB) at terminal time. */
+	evidence: string;
+	/** Wall time (ms) until the outcome was decided. */
+	elapsedMs: number;
 }
 
 /**
@@ -1963,148 +2028,158 @@ export interface PlanSkillFloorObservation {
  * numbered-option render. See block comment above for the contract.
  */
 export async function runPlanSkillFloorCheck(opts: {
-  /** Skill name, e.g. 'plan-eng-review'. Used for diagnostic strings only. */
-  skillName: string;
-  /** Slash command to send alone, e.g. '/plan-eng-review'. */
-  slashCommand: string;
-  /** Plan content sent as a follow-up message ~3s after the slash command. */
-  followUpPrompt: string;
-  /** Working directory. Default process.cwd(). */
-  cwd?: string;
-  /** Total budget. Default 600000 (10 min). Tests exit early on AUQ. */
-  timeoutMs?: number;
-  /** Extra env merged into the spawned `claude` process. */
-  env?: Record<string, string>;
+	/** Skill name, e.g. 'plan-eng-review'. Used for diagnostic strings only. */
+	skillName: string;
+	/** Slash command to send alone, e.g. '/plan-eng-review'. */
+	slashCommand: string;
+	/** Plan content sent as a follow-up message ~3s after the slash command. */
+	followUpPrompt: string;
+	/** Working directory. Default process.cwd(). */
+	cwd?: string;
+	/** Total budget. Default 600000 (10 min). Tests exit early on AUQ. */
+	timeoutMs?: number;
+	/** Extra env merged into the spawned `claude` process. */
+	env?: Record<string, string>;
 }): Promise<PlanSkillFloorObservation> {
-  const startedAt = Date.now();
-  const timeoutMs = opts.timeoutMs ?? 600_000;
+	const startedAt = Date.now();
+	const timeoutMs = opts.timeoutMs ?? 600_000;
 
-  const session = await launchClaudePty({
-    permissionMode: 'plan',
-    cwd: opts.cwd,
-    timeoutMs: timeoutMs + 60_000,
-    env: opts.env,
-  });
+	const session = await launchClaudePty({
+		permissionMode: "plan",
+		cwd: opts.cwd,
+		timeoutMs: timeoutMs + 60_000,
+		env: opts.env,
+	});
 
-  try {
-    await Bun.sleep(8000); // boot grace + auto-trust handler window
-    const since = session.mark();
-    session.send(`${opts.slashCommand}\r`);
-    await Bun.sleep(3000);
-    session.send(`${opts.followUpPrompt}\r`);
+	try {
+		await Bun.sleep(8000); // boot grace + auto-trust handler window
+		const since = session.mark();
+		session.send(`${opts.slashCommand}\r`);
+		await Bun.sleep(3000);
+		session.send(`${opts.followUpPrompt}\r`);
 
-    const start = Date.now();
-    let lastJudgeAt = 0;
-    let lastJudgeVerdict: PtyStateVerdict | null = null;
-    const JUDGE_AFTER_MS = 60_000;
-    const JUDGE_INTERVAL_MS = 30_000;
-    while (Date.now() - start < timeoutMs) {
-      await Bun.sleep(2000);
-      const visible = session.visibleSince(since);
+		const start = Date.now();
+		let lastJudgeAt = 0;
+		let lastJudgeVerdict: PtyStateVerdict | null = null;
+		const JUDGE_AFTER_MS = 60_000;
+		const JUDGE_INTERVAL_MS = 30_000;
+		while (Date.now() - start < timeoutMs) {
+			await Bun.sleep(2000);
+			const visible = session.visibleSince(since);
 
-      if (session.exited()) {
-        return {
-          auqObserved: false,
-          outcome: 'exited',
-          summary: `claude exited (code=${session.exitCode()}) before any AUQ render`,
-          evidence: visible.slice(-3000),
-          elapsedMs: Date.now() - startedAt,
-        };
-      }
-      if (visible.includes('Unknown command:')) {
-        return {
-          auqObserved: false,
-          outcome: 'exited',
-          summary: `claude rejected ${opts.slashCommand} as unknown command`,
-          evidence: visible.slice(-3000),
-          elapsedMs: Date.now() - startedAt,
-        };
-      }
+			if (session.exited()) {
+				return {
+					auqObserved: false,
+					outcome: "exited",
+					summary: `claude exited (code=${session.exitCode()}) before any AUQ render`,
+					evidence: visible.slice(-3000),
+					elapsedMs: Date.now() - startedAt,
+				};
+			}
+			if (visible.includes("Unknown command:")) {
+				return {
+					auqObserved: false,
+					outcome: "exited",
+					summary: `claude rejected ${opts.slashCommand} as unknown command`,
+					evidence: visible.slice(-3000),
+					elapsedMs: Date.now() - startedAt,
+				};
+			}
 
-      // Success: ANY non-permission numbered-option list is an AUQ render —
-      // either via the native numbered-prompt UI (isNumberedOptionListVisible)
-      // OR via prose-rendered options under --disallowedTools when no MCP
-      // variant is callable (isProseAUQVisible). Both surface the question
-      // to the user; the bug we're catching is "fired zero AUQs."
-      const tail = visible.slice(-TAIL_SCAN_BYTES);
-      if (
-        (isNumberedOptionListVisible(visible) || isProseAUQVisible(visible)) &&
-        !isPermissionDialogVisible(tail)
-      ) {
-        return {
-          auqObserved: true,
-          outcome: 'auq_observed',
-          summary: 'agent rendered an AskUserQuestion (floor met)',
-          evidence: visible.slice(-3000),
-          elapsedMs: Date.now() - startedAt,
-        };
-      }
+			// Success: ANY non-permission numbered-option list is an AUQ render —
+			// either via the native numbered-prompt UI (isNumberedOptionListVisible)
+			// OR via prose-rendered options under --disallowedTools when no MCP
+			// variant is callable (isProseAUQVisible). Both surface the question
+			// to the user; the bug we're catching is "fired zero AUQs."
+			const tail = visible.slice(-TAIL_SCAN_BYTES);
+			if (
+				(isNumberedOptionListVisible(visible) || isProseAUQVisible(visible)) &&
+				!isPermissionDialogVisible(tail)
+			) {
+				return {
+					auqObserved: true,
+					outcome: "auq_observed",
+					summary: "agent rendered an AskUserQuestion (floor met)",
+					evidence: visible.slice(-3000),
+					elapsedMs: Date.now() - startedAt,
+				};
+			}
 
-      // LLM judge fallback: same shape as runPlanSkillObservation. After 60s
-      // of polling without a regex hit, ask Haiku to classify the snapshot.
-      // 'waiting' verdict counts as floor met (model surfaced a question via
-      // prose the regex couldn't catch). 'working' / 'hung' / 'unknown' don't
-      // change the outcome — they enrich the eventual timeout summary so the
-      // failure diagnostic is more actionable than "no AUQ render."
-      const elapsed = Date.now() - start;
-      if (elapsed > JUDGE_AFTER_MS && Date.now() - lastJudgeAt > JUDGE_INTERVAL_MS) {
-        lastJudgeAt = Date.now();
-        logPtySnapshot(visible, { testName: opts.skillName, elapsedMs: elapsed, tag: 'floor-judge-tick' });
-        lastJudgeVerdict = judgePtyState(visible, { testName: opts.skillName });
-        if (lastJudgeVerdict.state === 'waiting') {
-          return {
-            auqObserved: true,
-            outcome: 'auq_observed',
-            summary: `LLM judge: ${lastJudgeVerdict.reasoning} (state=waiting after ${Math.round(elapsed / 1000)}s; floor met)`,
-            evidence: visible.slice(-3000),
-            elapsedMs: Date.now() - startedAt,
-          };
-        }
-      }
+			// LLM judge fallback: same shape as runPlanSkillObservation. After 60s
+			// of polling without a regex hit, ask Haiku to classify the snapshot.
+			// 'waiting' verdict counts as floor met (model surfaced a question via
+			// prose the regex couldn't catch). 'working' / 'hung' / 'unknown' don't
+			// change the outcome — they enrich the eventual timeout summary so the
+			// failure diagnostic is more actionable than "no AUQ render."
+			const elapsed = Date.now() - start;
+			if (
+				elapsed > JUDGE_AFTER_MS &&
+				Date.now() - lastJudgeAt > JUDGE_INTERVAL_MS
+			) {
+				lastJudgeAt = Date.now();
+				logPtySnapshot(visible, {
+					testName: opts.skillName,
+					elapsedMs: elapsed,
+					tag: "floor-judge-tick",
+				});
+				lastJudgeVerdict = judgePtyState(visible, { testName: opts.skillName });
+				if (lastJudgeVerdict.state === "waiting") {
+					return {
+						auqObserved: true,
+						outcome: "auq_observed",
+						summary: `LLM judge: ${lastJudgeVerdict.reasoning} (state=waiting after ${Math.round(elapsed / 1000)}s; floor met)`,
+						evidence: visible.slice(-3000),
+						elapsedMs: Date.now() - startedAt,
+					};
+				}
+			}
 
-      // Silent write outside sanctioned dirs is the transcript-bug shape.
-      const writeRe = /⏺\s*(?:Write|Edit)\(([^)]+)\)/g;
-      let m: RegExpExecArray | null;
-      while ((m = writeRe.exec(visible)) !== null) {
-        const target = m[1] ?? '';
-        const sanctioned = SANCTIONED_WRITE_SUBSTRINGS.some((s) => target.includes(s));
-        if (!sanctioned && !isNumberedOptionListVisible(visible)) {
-          return {
-            auqObserved: false,
-            outcome: 'silent_write',
-            summary: `Write/Edit to ${target} fired before any AskUserQuestion`,
-            evidence: visible.slice(-3000),
-            elapsedMs: Date.now() - startedAt,
-          };
-        }
-      }
+			// Silent write outside sanctioned dirs is the transcript-bug shape.
+			const writeRe = /⏺\s*(?:Write|Edit)\(([^)]+)\)/g;
+			let m: RegExpExecArray | null;
+			while ((m = writeRe.exec(visible)) !== null) {
+				const target = m[1] ?? "";
+				const sanctioned = SANCTIONED_WRITE_SUBSTRINGS.some((s) =>
+					target.includes(s),
+				);
+				if (!sanctioned && !isNumberedOptionListVisible(visible)) {
+					return {
+						auqObserved: false,
+						outcome: "silent_write",
+						summary: `Write/Edit to ${target} fired before any AskUserQuestion`,
+						evidence: visible.slice(-3000),
+						elapsedMs: Date.now() - startedAt,
+					};
+				}
+			}
 
-      // Reached terminal without AUQ → transcript-bug regression.
-      // Note: COMPLETION_SUMMARY_RE is intentionally NOT checked here — it
-      // matches "GSTACK REVIEW REPORT" anywhere in the buffer, including
-      // when the agent does recon by reading existing plan files (which
-      // contain that string as a generated section). The plan_ready check
-      // (claude's actual "Ready to execute" confirmation) is the reliable
-      // terminal signal for "agent finished without asking."
-      if (isPlanReadyVisible(visible)) {
-        return {
-          auqObserved: false,
-          outcome: 'plan_ready',
-          summary: 'agent reached plan_ready without firing any AskUserQuestion',
-          evidence: visible.slice(-3000),
-          elapsedMs: Date.now() - startedAt,
-        };
-      }
-    }
+			// Reached terminal without AUQ → transcript-bug regression.
+			// Note: COMPLETION_SUMMARY_RE is intentionally NOT checked here — it
+			// matches "GSTACK REVIEW REPORT" anywhere in the buffer, including
+			// when the agent does recon by reading existing plan files (which
+			// contain that string as a generated section). The plan_ready check
+			// (claude's actual "Ready to execute" confirmation) is the reliable
+			// terminal signal for "agent finished without asking."
+			if (isPlanReadyVisible(visible)) {
+				return {
+					auqObserved: false,
+					outcome: "plan_ready",
+					summary:
+						"agent reached plan_ready without firing any AskUserQuestion",
+					evidence: visible.slice(-3000),
+					elapsedMs: Date.now() - startedAt,
+				};
+			}
+		}
 
-    return {
-      auqObserved: false,
-      outcome: 'timeout',
-      summary: `no AUQ render and no terminal outcome within ${timeoutMs}ms`,
-      evidence: session.visibleSince(since).slice(-3000),
-      elapsedMs: Date.now() - startedAt,
-    };
-  } finally {
-    await session.close();
-  }
+		return {
+			auqObserved: false,
+			outcome: "timeout",
+			summary: `no AUQ render and no terminal outcome within ${timeoutMs}ms`,
+			evidence: session.visibleSince(since).slice(-3000),
+			elapsedMs: Date.now() - startedAt,
+		};
+	} finally {
+		await session.close();
+	}
 }

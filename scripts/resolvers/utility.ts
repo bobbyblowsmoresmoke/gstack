@@ -1,15 +1,15 @@
-import type { TemplateContext } from './types';
+import type { TemplateContext } from "./types";
 
 export function generateSlugEval(ctx: TemplateContext): string {
-  return `eval "$(${ctx.paths.binDir}/gstack-slug 2>/dev/null)"`;
+	return `eval "$(${ctx.paths.binDir}/gstack-slug 2>/dev/null)"`;
 }
 
 export function generateSlugSetup(ctx: TemplateContext): string {
-  return `eval "$(${ctx.paths.binDir}/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG`;
+	return `eval "$(${ctx.paths.binDir}/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG`;
 }
 
 export function generateBaseBranchDetect(_ctx: TemplateContext): string {
-  return `## Step 0: Detect platform and base branch
+	return `## Step 0: Detect platform and base branch
 
 First, detect the git hosting platform from the remote URL:
 
@@ -50,7 +50,7 @@ branch name wherever the instructions say "the base branch" or \`<default>\`.
 }
 
 export function generateDeployBootstrap(_ctx: TemplateContext): string {
-  return `\`\`\`bash
+	return `\`\`\`bash
 # Check for persisted deploy config in CLAUDE.md
 DEPLOY_CONFIG=$(grep -A 20 "## Deploy Configuration" CLAUDE.md 2>/dev/null || echo "NO_CONFIG")
 echo "$DEPLOY_CONFIG"
@@ -87,7 +87,7 @@ If you want to persist deploy settings for future runs, suggest the user run \`/
 }
 
 export function generateQAMethodology(_ctx: TemplateContext): string {
-  return `## Modes
+	return `## Modes
 
 ### Diff-aware (automatic when on a feature branch with no URL)
 
@@ -367,13 +367,16 @@ Minimum 0 per category.
 }
 
 export function generateCoAuthorTrailer(ctx: TemplateContext): string {
-  const { getHostConfig } = require('../../hosts/index');
-  const hostConfig = getHostConfig(ctx.host);
-  return hostConfig.coAuthorTrailer || 'Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>';
+	const { getHostConfig } = require("../../hosts/index");
+	const hostConfig = getHostConfig(ctx.host);
+	return (
+		hostConfig.coAuthorTrailer ||
+		"Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
+	);
 }
 
 export function generateChangelogWorkflow(_ctx: TemplateContext): string {
-  return `## Step 13: CHANGELOG (auto-generate)
+	return `## Step 13: CHANGELOG (auto-generate)
 
 1. Read \`CHANGELOG.md\` header to know the format.
 

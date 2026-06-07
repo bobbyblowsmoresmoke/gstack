@@ -8,9 +8,9 @@
  */
 
 export function getCookiePickerHTML(serverPort: number): string {
-  const baseUrl = `http://127.0.0.1:${serverPort}`;
+	const baseUrl = `http://127.0.0.1:${serverPort}`;
 
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
